@@ -1,0 +1,7 @@
+<resources>
+    <string name="app_name">Living Room</string>
+    <string name="home_key_service_description">Opens Living Room when you press Home.</string>
+    <string name="explore">Explore</string>
+    <string name="continue_watching">Continue watching</string>
+    <string name="settings_title">Home screen settings</string>
+</resources>

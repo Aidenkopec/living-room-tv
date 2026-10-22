@@ -1,0 +1,18 @@
+.superpowers/
+snapshots/
+
+# Home screen app build output
+launcher/.gradle/
+launcher/.kotlin/
+launcher/**/build/
+launcher/local.properties
+
+# Screensaver photos: made by scripts/fetch-screensaver-photos.sh, kept out of git
+launcher/app/src/main/assets/screensaver/
+# The home screen photo's two files: made by scripts/fetch-home-photo.sh, kept out of git
+launcher/app/src/main/assets/home/
+
+# Your TV's address, read by scripts/lib/tv.sh: local only
+.tv
+# Words that must never be published (show names and the like), read by scripts/check-public.sh: local only
+.private-words

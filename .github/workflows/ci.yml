@@ -1,0 +1,55 @@
+# Runs on every push and pull request. No TV is needed: the app's logic is unit-tested on the JVM,
+# and the TV scripts are tested against fake adb, curl and sips.
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  app:
+    name: App (format, static analysis, tests, lint, release build)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: 21
+      - uses: gradle/actions/setup-gradle@v6
+      # The screensaver and home photos are downloaded by script and never committed, so this
+      # builds without them, as a fresh clone does: the app then falls back to its painted skies.
+      - name: Build
+        working-directory: launcher
+        run: ./gradlew spotlessCheck detekt :photoprep:test :app:testDebugUnitTest :app:lintRelease :app:assembleRelease
+
+  scripts:
+    name: Scripts (shellcheck, restore and privacy tests)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Shellcheck
+        run: shellcheck -x --severity=warning scripts/*.sh scripts/lib/*.sh scripts/tests/*.sh
+      - name: Restore script against a fake TV
+        run: bash scripts/tests/restore-tv-dry-run.test.sh
+      - name: Privacy check and its tests
+        run: |
+          bash scripts/tests/check-public.test.sh
+          scripts/check-public.sh
+
+  photo-scripts:
+    name: Photo scripts (macOS, for sips)
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: 21
+      - name: Screensaver photos against a fake server
+        run: bash scripts/tests/fetch-screensaver-photos.test.sh
+      - name: Home photo against a fake server
+        run: bash scripts/tests/fetch-home-photo.test.sh

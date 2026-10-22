@@ -1,0 +1,55 @@
+# Changes to detekt's default rules for this project, each with its reason.
+
+style:
+  MaxLineLength:
+    # The same limit as ktlint's (.editorconfig).
+    maxLineLength: 140
+  MagicNumber:
+    # Most literals here are published series coefficients (NOAA's sun, Meeus's moon) or design
+    # sizes in dp; naming each one would hide where it comes from. Values used in more than one
+    # place are already named constants.
+    active: false
+  ReturnCount:
+    # Early returns for "nothing to do" cases read better than nesting.
+    max: 3
+    excludeGuardClauses: true
+  LoopWithTooManyJumpStatements:
+    maxJumpCount: 2
+
+naming:
+  FunctionNaming:
+    # Composable functions are named like classes, by Compose convention.
+    ignoreAnnotated: ['Composable']
+  MatchingDeclarationName:
+    # Files are named after their topic (Weather.kt holds WeatherNow and the weather rules),
+    # not after the one class they happen to contain.
+    active: false
+
+complexity:
+  LongMethod:
+    # A screen-level composable lays out a whole screen; its decisions live in pure, tested
+    # functions elsewhere.
+    ignoreAnnotated: ['Composable']
+  CyclomaticComplexMethod:
+    ignoreAnnotated: ['Composable']
+    # A `when` from a weather code to its words is one decision, not eighteen.
+    ignoreSimpleWhenEntries: true
+  TooManyFunctions:
+    # A feature's pure functions are kept together in one file, so tests and readers find them.
+    allowedFunctionsPerFile: 25
+    allowedFunctionsPerObject: 15
+  NestedBlockDepth:
+    # Tests that sweep every time of the year nest loops on purpose.
+    excludes: ['**/test/**']
+
+empty-blocks:
+  EmptyFunctionBlock:
+    # Required overrides with nothing to do, and no-op fakes in tests.
+    ignoreOverridden: true
+    excludes: ['**/test/**']
+
+exceptions:
+  TooGenericExceptionCaught:
+    # A home screen must never crash because a system service (PackageManager, TvInputManager,
+    # media sessions) misbehaves: these calls catch Exception, log it, and fall back.
+    active: false

@@ -1,0 +1,18 @@
+# Weekly pull requests when a library, Gradle plugin or GitHub Action has a new version.
+# A dependency bump changes the APK, so like any other build it's installed on the TV,
+# checked and logged in docs/tv-change-log.md before it's merged.
+version: 2
+updates:
+  - package-ecosystem: gradle
+    directory: /launcher
+    schedule:
+      interval: weekly
+    groups:
+      androidx:
+        patterns: ["androidx.*"]
+      kotlin-and-build-tools:
+        patterns: ["org.jetbrains.kotlin*", "com.android.*", "com.diffplug.*", "dev.detekt*"]
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly

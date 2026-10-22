@@ -1,0 +1,78 @@
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
+## What this repo is
+
+A makeover of one real TV: a Hisense 55A51HUA Google TV (Android 12 / API 31, 32-bit `armeabi-v7a`, ~1.8 GB RAM) on the home network, driven from the Mac over ADB. Its address is never committed: it lives in the git-ignored `.tv` file, and commands here write it as `$TV`. Two kinds of work live here:
+
+- **TV changes** (removing/turning off apps, settings), done one at a time with `adb`, each logged with its undo in `docs/tv-change-log.md`.
+- **"Living Room"** (`launcher/`, package `tv.livingroom.home`), our own home screen app that takes over the Home button.
+
+The design is `docs/spec.md` (goals, anti-goals, phases, and who decided what); `docs/architecture.md` explains the app for engineers. Each phase/milestone gets its own plan in `.superpowers/plans/` (git-ignored, local only), written only after the previous one is done. Done: Phase 1 (clean-up), Phase 2 (milestones 1–4), Phase 3 (the screensaver), milestone 5 ("Living sky") and its polish, milestone 6 ("Mountains and dock", #68–#70), milestone 7 ("Mount Rundle", #72) and the code clean-up for going public (builds 46–48, #73–#75). Don't start a milestone without a plan the user approved.
+
+## Commands
+
+Build the app (formatting check, detekt static analysis, unit tests, the photo prep tool's tests and full release lint, which catches crash-causing mistakes such as an API newer than Android 12; always run them all):
+
+```
+cd launcher
+JAVA_HOME=/opt/homebrew/opt/openjdk@21 ./gradlew spotlessCheck detekt :photoprep:test :app:testDebugUnitTest :app:lintRelease :app:assembleRelease
+```
+
+`./gradlew spotlessApply` formats (ktlint, Android Studio style, 140 columns; settings in `.editorconfig` and `launcher/build.gradle.kts`). ktlint no longer removes unused imports: check new files by eye. detekt's rule changes, each with its reason, are in `launcher/config/detekt.yml`; Kotlin warnings fail the build (`allWarningsAsErrors`). Dependabot (`.github/dependabot.yml`) opens weekly version bumps; a bump changes the APK, so it goes to the TV and the change log like any build. Single test: `./gradlew :app:testDebugUnitTest --tests 'tv.livingroom.home.homekey.HomeKeyPolicyTest'` (append `.methodName` for one method). CI (`.github/workflows/ci.yml`) runs all of this plus shellcheck and the script tests.
+
+Install on the TV (this is a TV change, see the rules below): `adb -s $TV install -r launcher/app/build/outputs/apk/release/app-release.apk`
+
+TV scripts (all accept `ADB=` and `TV=`; without `TV=` they read `.tv` through `scripts/lib/tv.sh`):
+
+- `scripts/check-tv.sh`: the after-every-change checks (Home opens our screen, HDMI 1 switches, Cast + AirPlay advertised, YouTube plays, Google home opens directly). Prints PASS/FAIL, takes about a minute, **plays audio out loud and can wake the PS5**, so only run it when the user says the room is free. `CHECK_SELFTEST=1` runs against wrong targets; every check must FAIL.
+- `scripts/restore-tv.sh`: dry run by default (prints `WOULD:` lines); `--apply` puts the TV back to stock. Its expected dry-run line count is recorded under "Ways back" in the change log.
+- `scripts/press-home.sh [hold_ms]`: presses Home the way the real remote does, via a virtual HID device. `adb shell input keyevent KEYCODE_HOME` **skips accessibility services on this TV**, so it can't test the Home takeover.
+- `scripts/tv-memory.sh`: memory reading (~4 min); "Available" (MemAvailable) is the number to compare.
+- `scripts/check-public.sh`: fails if a tracked file has a home-network address, a date with a time of day, a private mockup link, a home-folder path, or a word from `.private-words`.
+- Script tests (no TV): `bash scripts/tests/<name>.test.sh` for `restore-tv-dry-run`, `check-public`, `fetch-screensaver-photos` and `fetch-home-photo`. Run the matching one after changing a script, and `shellcheck -x --severity=warning` on it.
+
+If the TV looks offline from VS Code's terminal ("No route to host"; `echo $TERM_PROGRAM` says `vscode`), run from the Terminal app, or use the `nc` relay under "Getting ADB back after a restart" in the change log with `TV=127.0.0.1:15555`.
+
+## Rules for changing the TV
+
+- One change at a time. After each: `scripts/check-tv.sh` passes, then a row goes into `docs/tv-change-log.md` (numbered on from the last row) with the exact command **and its exact undo**, before the next change. No bulk "debloat" scripts.
+- Teach `scripts/restore-tv.sh` (and its fake-TV test) how to undo a new kind of change **before** making it.
+- Every APK installed on the TV raises `versionCode` in `launcher/app/build.gradle.kts` and gets its own change log row.
+- Must not break: HDMI inputs, casting, AirPlay, screen mirroring, YouTube Premium sign-in, renting, system updates.
+- Leave alone: Google's home (`com.google.android.apps.tv.launcherx`, stays installed and the system default), the second user slot (`new_user`, user 10), Protector (`com.vt.tv.protector`), `system screen_off_timeout` (10 minutes; only changed briefly for tests, #59/#60).
+- Don't reboot the TV unless the user says so; ADB over the network may not come back on its own. Never force-stop the app (`am start -S`, `am force-stop`): Android then turns the Home-button service off.
+- Say before doing anything that changes what's on the TV screen (installs, test switches, screenshots): the user may be watching it.
+- Read-only `adb` queries are always fine. Anything not covered by the spec or plan: ask, don't decide.
+- Local only (git-ignored): `snapshots/` (stock TV state captured before any change), `.superpowers/` (plans and mockups), `.tv` (the TV's address), `.private-words` (show names and the like that must never be published). Never write the TV's address, times of day or real show names into a tracked file; use made-up show names in tests and screenshots (`SAMPLE_SHOWS`).
+
+## Living Room app architecture
+
+Kotlin + Jetpack Compose for TV (`androidx.tv:tv-material`), module `launcher/app`, versions pinned in `launcher/gradle/libs.versions.toml`. `minSdk`/`targetSdk` 31 to match the TV; the release build is minified and signed with the debug key (sideloaded only, never on Play). Memory budget: about 80 MB while showing, the screensaver included (same process); 51–60 MB with Mount Rundle (#72). The full history of readings is in the change log.
+
+Layout: the manifest components (`MainActivity`, `SettingsActivity`, `ScreensaverPreviewActivity`, `TestSwitchActivity`, `HomeKeyService`, `NowPlayingListener`, `ScreensaverService`) stay in the root package **because the TV's settings store their full class names** (#21, #37, #53): moving one silently turns off the Home button, notification access or the screensaver. Everything else is grouped by feature: `homekey`, `apps`, `tiles`, `homescreen` (what both layouts share), `livingsky`, `dock`, `sky`, `watch`, `screensaver`, `weather`, `settings`, `testswitch`. `HomePlace.kt` holds the location (Calgary). Put new logic in pure functions and test them on the JVM; Android glue stays thin.
+
+- **The Home takeover** ("Option A" in the spec): Google's home stays the system default, and `HomeKeyService` (accessibility service, `flagRequestFilterKeyEvents`) consumes Home and opens `MainActivity` on key-up. A held Home is timed in the service (it only gets down/up) and opens Google's side panel (`GLOBAL_ACTION_NOTIFICATIONS`). If opening our screen fails it falls back to `GLOBAL_ACTION_HOME`. `homekey/HomeKeyPolicy.kt` is the pure decision (`homeKeyAction`, `homeCaught`). Settings → "Switch back to Google's home screen" calls `HomeKeyService.switchOff()` (`disableSelf()`). The service is turned on over ADB (`settings put secure enabled_accessibility_services` / `accessibility_enabled`, #21).
+- **Home race:** on every Home press Android also starts Google's home itself (~100 ms after key-down); ours opens 20–60 ms later and usually wins. Rarely Google's starts itself again ~120 ms after ours and stays, seen on the first Home press after several idle minutes; `check-tv.sh`'s "Home screen opens" then fails and a second run passes. Avoid `uiautomator dump` while testing: it makes the Home-button service reconnect.
+- **Two home screens**, picked in Settings → Look and saved as `home_layout` in `HomePrefs` (`settings/HomeLayout.kt`, `DEFAULT_LAYOUT` = Mountains and dock). `MainActivity` re-reads it on every resume and shows `dock/DockHomeScreen` or `livingsky/HomeScreen`. Both use `homescreen/` for the minute clock, weather, app art, refocusing and focus rules (`startIndex`, `refocusIndex`, `SeenRow`, `shownTime`).
+- **Living sky** (`livingsky/`): top area and corner (`TopArea.kt`, `TopAreaView.kt`), title fitting (`TitleFit.kt`: two balanced lines, smaller only if needed, never cut), Continue watching cards (`WatchCardView.kt`; the row keeps one card to the left of the selected one via a custom `BringIntoViewSpec` plus `settleCardRow`) and the app row (`tiles/AppTile.kt`; the PS5 and Explore are square tiles).
+- **Mountains and dock** (`dock/`): the whole screen is sky, a quiet clock (`dockInfoLine`) and a floating dock (`Dock.kt`: `dockHeightAt`, `dockSlots`, `dockStart`, `dockSeparatorBefore`). The tiles are laid out once at the tallest size and only scaled and slid in the draw phase (`graphicsLayer`) from one animated focus position: re-sizing them each frame was too slow (#68, #69). Because they all sit in one place until drawn, Left/Right are handled by the dock itself (`dockKeys`).
+- **The skies** (`sky/`): `Sun.kt` (NOAA), `Moon.kt` (Meeus, checked against USNO), `Astronomy.kt` (Julian day helpers), `HomeSky.kt` (`homeSkyScene`, sun/moon on screen, `backdropAt` + `contrast` for the readability test over every sky of the year), `HomeSkyView.kt` (`HomeSky`, `DockSky`: each minute's scene painted once off the main thread into one picture at the screen's 1920×1080, because full-size gradients every frame are too slow for this GPU), `SkyPainting.kt` (drawing shared with the screensaver).
+- **Mount Rundle**: `scripts/fetch-home-photo.sh` downloads the approved photo (`docs/home-photo.md`), crops it with `sips` and runs `launcher/photoprep` (JVM-only: `Cut.kt` finds the skyline and makes the layers; Rundle's guides in `Rundle.kt`) to make `assets/home/rundle-land.jpg` and `rundle-layers.png` (git-ignored; R sky, G lake shows sky, B high rock, A ripple) and the committed `assets/home-photo.tsv`. In the app, `sky/HomePhoto.kt` is pure (`landGrade`, `composePixel`/`composeRow`/`composeLand` over a `PixelRows` interface: bitmaps on the TV, arrays in tests); `HomePhotoLoader.kt` decodes the files for each paint. Without the files the dock shows drawn ridges and `HomePhotoTest`'s photo tests are skipped.
+- **Continue watching** (`watch/`): `NowPlayingListener` (a notification listener that never reads notifications; needs notification access, #37) follows media sessions (`MediaSessions.kt`) and saves a card through `WatchStore` when the show or playing/paused changes or the session goes (YouTube and Apple TV vanish at Home without a pause). `ContinueWatching.kt` holds `cardFrom` (each app's way of naming its show), `mergeCard` (12 shows, 6 per app), removal markers and the saved format (`files/continue-watching-2.txt`, v2; the older v1 file is still read once and never written). `Resume.kt` (`resumeSteps`) picks each app's resume level; `ResumeLauncher.kt` runs it. Only Crave, YouTube and Paramount+ share a show name; Netflix, Apple TV and Disney+ block screenshots, so they can't be driven blind over ADB.
+- **Apps and inputs** (`apps/`): `InstalledApps.kt` queries `LEANBACK_LAUNCHER` activities and loads banners and glow colours; `UsageHistory.kt` needs usage access (#27); `HdmiInputs.kt` makes one tile per HDMI-CEC device, its dot following `TvInputManager.getInputState` (0 on, 1 standby), watched live from `MainActivity.onStart`/`onStop`; `AppRow.kt` holds the row order, hidden tiles, `moveKey` and `mergeOrder`. Long-press OK opens `tiles/TileMenuView`'s menu. `adb shell input keyevent --longpress` sends only one repeat; test a held OK with a held virtual remote.
+- **Weather** (`weather/`): `WeatherSource` fetches `HomePlace`'s weather from Open-Meteo (the app's only internet use; no account), one fetch at a time.
+- **Screensaver** (`screensaver/`): `ScreensaverService` (a `DreamService`, chosen with `secure screensaver_components`, #53; Compose needs its own lifecycle and saved-state owners there) shows Living sky within 30 minutes of sunrise/sunset, Beautiful places (61 photos via `PhotoLoader`, a new one each minute) otherwise, and dimmed night photos after 11 PM, ending itself after 30 minutes so the TV goes to standby (#59). Rules in `Screensaver.kt` and `SaverPhotos.kt`. The photos: `scripts/fetch-screensaver-photos.sh` (approved list `docs/screensaver-images.md`, upload.wikimedia.org only, SHA-1 checked, made with `sips` into the git-ignored `assets/screensaver/`); `assets/screensaver-photos.tsv` (committed) has captions and credits. The TV sleeps after 2 hours untouched (`secure sleep_timeout`, #54).
+- **Test switches** go only through `TestSwitchActivity` (needs `android.permission.DUMP`, so only adb's shell can open it; its own empty task affinity so every launch creates it, #75). `MainActivity` reads no extras. Each lasts for that one opening: `--ei tv.livingroom.home.HOUR 11`; `--es …AT 18:04` (time stands still); `--ei …WEATHER 71`; `--ei …SAMPLE_SHOWS 12` (placeholder shows, never saved; Living sky only); `--es …LAYOUT dock|sky`; `--es …SAVER_AT 18:04` opens a screensaver preview (with `--ei …SAVER_WEATHER 71`; `--ez …SAVER_NEXT true` applies it to the next real screensaver instead, forgotten after 15 minutes; `--ei …SAVER_OFF_MIN 1` for a 1-minute late-night turn-off). Example: `adb -s $TV shell am start -n tv.livingroom.home/.TestSwitchActivity --es tv.livingroom.home.AT 12:30 --ei tv.livingroom.home.WEATHER 73`. Start the real screensaver with `adb -s $TV shell am start -n com.android.systemui/.Somnambulator`, but to test the late-night turn-off let it start by itself: Android only puts the TV to standby when a screensaver ends after the idle time has passed.
+- **Measuring:** memory with `dumpsys meminfo tv.livingroom.home` about 10 s after moving along the row (it peaks for a few seconds right after); smoothness with `dumpsys gfxinfo tv.livingroom.home` (`reset`, move along the row, read the 50th percentile and legacy jank; the newer "Janky frames" figure under-reports on this TV), compared with Google's home doing the same moves. For visual changes, compare before/after screenshots (`adb exec-out screencap -p`) at fixed test-switch times.
+- Log tag is `LivingRoomHome` (`adb -s $TV logcat -s LivingRoomHome`). The release build can't be read with `run-as`, so the app logs what it read (for example "Read 8 saved shows from continue-watching-2.txt").
+
+## Writing style
+
+Two audiences:
+
+- **The user:** the change log, the spec, plans and script header comments are written in plain, non-technical English (second person, short sentences, "turn off" rather than "disable"), and mark which choices the user decided versus which were Claude's call. Keep new text there in that voice.
+- **Outside engineers:** the README, `docs/architecture.md` and code comments are neutral and technical. Comments keep the *why* (hardware limits, Android quirks, sources) and leave out dates, build or milestone numbers, change-log numbers and "you". Don't restate the code.
+
+Scripts start with a header comment explaining what they do, how to run them, and their settings (`ADB=`/`TV=` and so on).

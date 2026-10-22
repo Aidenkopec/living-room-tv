@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Living Room's own banner (320x180 dp) in Google's Apps list: the home screen's dark background and warm glow. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="320dp"
+    android:height="180dp"
+    android:viewportWidth="320"
+    android:viewportHeight="180">
+    <path android:fillColor="#05070A" android:pathData="M0,0h320v180h-320z" />
+    <path android:pathData="M0,0h320v180h-320z">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:type="radial"
+                android:centerX="240"
+                android:centerY="30"
+                android:gradientRadius="200"
+                android:startColor="#80C8783C"
+                android:endColor="#00C8783C" />
+        </aapt:attr>
+    </path>
+    <path android:fillColor="#F2C77B" android:pathData="M112,118h96v8h-96z" />
+    <path android:fillColor="#F2C77B" android:pathData="M128,70h64v40h-64z" />
+</vector>

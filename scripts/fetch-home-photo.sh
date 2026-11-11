@@ -8,11 +8,12 @@
 #   2. The download must really be a JPEG, with the list's exact fingerprint
 #      (SHA-1) and pixel size. Anything else is deleted and the script stops.
 #   3. A fresh copy is made with macOS's sips: the top 16:9 of the photo, in
-#      sRGB, as a BMP (pixels only, no camera or location details), resized
-#      to 1920×1080. The original is deleted straight away.
-#   4. The project's own prep tool (launcher/photoprep) cuts the sky away and
-#      makes the layers; it stops if the framing is off. Its two files are
-#      checked before they're moved into the app.
+#      sRGB, as a BMP (pixels only, no camera or location details), at full
+#      size. The original is deleted straight away.
+#   4. The project's own prep tool (launcher/photoprep) shrinks the copy to
+#      the TV's 1920×1080 (more carefully than sips, so it stays sharp), cuts
+#      the sky away and makes the layers; it stops if the framing is off. Its
+#      two files are checked before they're moved into the app.
 #   5. Nothing downloaded is ever run. The download goes in its own new folder
 #      outside the code, deleted at the end.
 # If the files are already made, nothing is downloaded. Uses only curl,
@@ -89,25 +90,23 @@ download "$id" "$url" "$orig"
 check_original "$id" "$orig" "$sha" "$w" "$h"
 
 # The top 16:9 of the photo. (sips takes an offset of 0 to mean "the middle",
-# so the cut starts at row 1: half a pixel on the TV.)
+# so the cut starts at row 1: about a quarter of a pixel on the TV.)
 ch=$(((w * 9 + 8) / 16))
 [ $((ch + 1)) -le "$h" ] || die "the photo is too wide for a 16:9 cut from the top"
 sips --matchTo "$SRGB" -s format bmp --cropToHeightWidth "$ch" "$w" --cropOffset 1 0 "$orig" --out "$DL/cropped.bmp" >/dev/null
 rm -f "$orig"
 [ "$(prop "$DL/cropped.bmp" pixelWidth) $(prop "$DL/cropped.bmp" pixelHeight)" = "$w $ch" ] \
   || die "the 16:9 cut came out $(prop "$DL/cropped.bmp" pixelWidth)×$(prop "$DL/cropped.bmp" pixelHeight), not ${w}×${ch}"
-sips --resampleHeightWidth 1080 1920 "$DL/cropped.bmp" --out "$DL/sized.bmp" >/dev/null
-rm -f "$DL/cropped.bmp"
 
-echo "Cutting the sky away (launcher/photoprep)"
+echo "Shrinking it and cutting the sky away (launcher/photoprep)"
 mkdir -p "$DL/made"
 if [ -n "$PREP" ]; then
-  "$PREP" "$DL/sized.bmp" "$DL/made"
+  "$PREP" "$DL/cropped.bmp" "$DL/made"
 else
   (cd "$ROOT/launcher" && JAVA_HOME="${JAVA_HOME:-/opt/homebrew/opt/openjdk@21}" \
-    ./gradlew -q :photoprep:run --args="$DL/sized.bmp $DL/made")
+    ./gradlew -q :photoprep:run --args="$DL/cropped.bmp $DL/made")
 fi
-rm -f "$DL/sized.bmp"
+rm -f "$DL/cropped.bmp"
 good_land "$DL/made/land.jpg" || die "the prep tool's land.jpg isn't a clean 1920×1080 JPEG"
 good_layers "$DL/made/layers.png" || die "the prep tool's layers.png isn't a 1920×1080 PNG with four channels"
 eye_row="$(awk -F'\t' '$1 == "eye_row" { print $2 }' "$DL/made/photo.txt")"

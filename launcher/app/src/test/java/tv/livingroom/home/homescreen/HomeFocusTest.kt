@@ -110,6 +110,14 @@ class HomeFocusTest {
     }
 
     @Test
+    fun shownTimeTakesAPretendDate() {
+        val eve = java.time.LocalDate.of(2026, 12, 24)
+        assertEquals(now.with(eve), shownTime(now, HomeOverrides(date = eve)))
+        assertEquals(now.with(eve).with(LocalTime.of(7, 45)), shownTime(now, HomeOverrides(date = eve, at = LocalTime.of(7, 45))))
+        assertEquals(now.with(eve).withHour(11), shownTime(now, HomeOverrides(date = eve, hour = 11)))
+    }
+
+    @Test
     fun shownTimeFollowsTheSwitch() {
         assertEquals(now.withHour(11), shownTime(now, HomeOverrides(hour = 11)))
         assertEquals(now.with(LocalTime.of(7, 45)), shownTime(now, HomeOverrides(hour = 11, at = LocalTime.of(7, 45))))

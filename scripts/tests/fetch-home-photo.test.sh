@@ -91,8 +91,9 @@ run_case good "200 $WORK/good.jpg" "$GOOD_URL" "$GOOD_SHA"
 [ "$OUT_CODE" -eq 0 ] && pass "goodPhotoMade: exit 0" || fail "goodPhotoMade: exit 0 (got $OUT_CODE: $OUT)"
 [ -s "$CASE/out/home/rundle-land.jpg" ] && [ -s "$CASE/out/home/rundle-layers.png" ] \
   && pass "goodPhotoMade: both files in place" || fail "goodPhotoMade: both files in place"
-[ "$(cat "$CASE/prep-input" 2>/dev/null)" = "1920 1080 " ] \
-  && pass "goodPhotoMade: the prep tool got a 1920×1080 copy" || fail "goodPhotoMade: the prep tool got a 1920×1080 copy ($(cat "$CASE/prep-input" 2>/dev/null))"
+CUT="$GOOD_W $(((GOOD_W * 9 + 8) / 16)) "
+[ "$(cat "$CASE/prep-input" 2>/dev/null)" = "$CUT" ] \
+  && pass "goodPhotoMade: the prep tool got the full-size 16:9 cut" || fail "goodPhotoMade: the prep tool got the full-size 16:9 cut (${CUT}wanted, got $(cat "$CASE/prep-input" 2>/dev/null))"
 TSV="$CASE/out/home-photo.tsv"
 [ "$(sed -n 1p "$TSV" 2>/dev/null)" = "$(printf 'land\tlayers\tplace\tregion\tcredit\tlicence\tpage\tchanges\teye_row\tland_top')" ] \
   && pass "goodPhotoMade: list header" || fail "goodPhotoMade: list header"

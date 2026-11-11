@@ -35,6 +35,8 @@ case "$*" in
   "shell cmd package resolve-activity --brief -a android.intent.action.MAIN -c android.intent.category.HOME") cat "$FAKE/home.txt" ;;
   "shell settings get secure screensaver_components") cat "$FAKE/screensaver.txt" ;;
   "shell settings get secure sleep_timeout") cat "$FAKE/sleep-timeout.txt" ;;
+  "shell getprop persist.sys.timezone") cat "$FAKE/time-zone.txt" ;;
+  "shell service call alarm"*) echo "Result: Parcel(00000000    '....')" ;;
   "shell settings get global alexa_policy_agreed") cat "$FAKE/alexa-policy.txt" ;;
   "shell dumpsys sensor_privacy") cat "$FAKE/sensor-privacy.txt" ;;
   "shell settings get secure enabled_accessibility_services") cat "$FAKE/a11y-services.txt" ;;
@@ -71,6 +73,7 @@ EOF
   printf 'priority=0 preferredOrder=0 match=0x108000 specificIndex=-1 isDefault=false\ncom.google.android.apps.tv.launcherx/.home.HomeActivity\n' > "$1/home.txt"
   echo "com.google.android.apps.tv.dreamx/.service.Backdrop" > "$1/screensaver.txt"
   echo "1200000" > "$1/sleep-timeout.txt"   # stock: the TV sleeps after 20 minutes
+  echo "America/Edmonton" > "$1/time-zone.txt"   # stock: picked at setup
   echo "true" > "$1/alexa-policy.txt"
   echo "" > "$1/a11y-services.txt"   # stock: empty, not "null"
   echo "0" > "$1/a11y-enabled.txt"
@@ -99,7 +102,7 @@ run() { # $1 = fake dir, rest = args
 }
 
 no_writes() { # $1 = fake dir
-  ! grep -qE 'default-state|pm enable|pm disable|settings put|settings delete|set-home-activity|am start|install|uninstall|disallow_listener' "$1/calls.log"
+  ! grep -qE 'default-state|pm enable|pm disable|settings put|settings delete|set-home-activity|am start|install|uninstall|disallow_listener|service call' "$1/calls.log"
 }
 
 # --- 1. changed TV, dry run -----------------------------------------------
@@ -161,6 +164,19 @@ echo "7200000" > "$T/sleep-timeout.txt"
 OUT="$(run "$T")"
 [ "$OUT" = "WOULD: settings put secure sleep_timeout 1200000" ] \
   && pass "sleepTimeoutRestored: dry run puts 20 minutes back" || fail "sleepTimeoutRestored: dry run puts 20 minutes back (got: $OUT)"
+
+# --- 3d. time zone set to Regina (Alberta's year-round time on old rules) ----
+T="$WORK/timezone"; stock_tv "$T"
+echo "America/Regina" > "$T/time-zone.txt"
+OUT="$(run "$T")"
+[ "$OUT" = "WOULD: time zone back to America/Edmonton (service call alarm 3 s16 America/Edmonton)" ] \
+  && pass "timeZoneRestored: dry run puts Edmonton back" || fail "timeZoneRestored: dry run puts Edmonton back (got: $OUT)"
+no_writes "$T" \
+  && pass "time zone: dry run sends no write commands" || fail "time zone: dry run sends no write commands"
+: > "$T/calls.log"
+run "$T" --apply </dev/null >/dev/null
+grep -qxF -- "-s 203.0.113.7:5555 shell service call alarm 3 s16 America/Edmonton" "$T/calls.log" \
+  && pass "time zone: apply sends setTimeZone with Edmonton" || fail "time zone: apply sends setTimeZone with Edmonton ($(grep alarm "$T/calls.log"))"
 
 # --- 4. --apply with nobody at the keyboard -------------------------------
 T="$WORK/apply"; stock_tv "$T"

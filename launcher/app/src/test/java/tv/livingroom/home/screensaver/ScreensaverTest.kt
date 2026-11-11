@@ -25,6 +25,21 @@ class ScreensaverTest {
     // --- which style when ---
 
     @Test
+    fun firesideShowsWhenChristmasIsOnUnlessASwitchSaysOtherwise() {
+        assertTrue(saverShowsFireside(christmasOn = true, override = null))
+        assertFalse(saverShowsFireside(christmasOn = false, override = null))
+        assertTrue(saverShowsFireside(christmasOn = false, override = true)) // "Preview Fireside" with Christmas off.
+        assertFalse(saverShowsFireside(christmasOn = true, override = false)) // "Preview Living sky" with Christmas on.
+    }
+
+    @Test
+    fun aFiresideThatFailedGivesWayToTheEverydayScreensaver() {
+        assertTrue(showsFireside(wanted = true, failed = false))
+        assertFalse(showsFireside(wanted = true, failed = true))
+        assertFalse(showsFireside(wanted = false, failed = false))
+    }
+
+    @Test
     fun thirtyMinutesIsSky() {
         assertEquals(sky, saverScene(october.sunset.minusMinutes(30)))
         assertEquals(sky, saverScene(october.sunset))
@@ -266,4 +281,11 @@ class ScreensaverTest {
 
     @Test
     fun driftProgressStopsAtTheEnd() = assertEquals(1f, slideProgress(10 * SAVER_PHOTO_MS), 0f)
+
+    @Test
+    fun aRecentFiresidePressHoldsTheLateNightTurnOff() {
+        assertFalse(turnOffHeldByPress(null, 1_000_000L, 600_000L))
+        assertTrue(turnOffHeldByPress(500_000L, 1_000_000L, 600_000L))
+        assertFalse(turnOffHeldByPress(300_000L, 1_000_000L, 600_000L))
+    }
 }

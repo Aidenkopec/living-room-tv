@@ -157,18 +157,23 @@ fun paintDockSky(scene: HomeSkyScene, pixelsPerDp: Float = 1f, land: LandPhoto? 
     if (land != null && !composeOnto(picture, land, scene, keepGoing)) return null
     paintOn(picture, width, height, scale) {
         drawWeather(scene.weather)
-        drawClockShade()
-        val shade = Color.Black.copy(alpha = DockSkyLayout.BOTTOM_SHADE_ALPHA)
-        drawRect(
-            Brush.verticalGradient(
-                0f to Color.Transparent,
-                1f to shade,
-                startY = DockSkyLayout.BOTTOM_SHADE_TOP,
-                endY = DockSkyLayout.HEIGHT,
-            ),
-        )
+        drawDockShades()
     }
     return picture
+}
+
+/** The shades of a screen with the quiet clock and the dock ([DockSkyLayout]): behind the clock, and darkening toward the bottom. */
+fun DrawScope.drawDockShades() {
+    drawClockShade()
+    val shade = Color.Black.copy(alpha = DockSkyLayout.BOTTOM_SHADE_ALPHA)
+    drawRect(
+        Brush.verticalGradient(
+            0f to Color.Transparent,
+            1f to shade,
+            startY = DockSkyLayout.BOTTOM_SHADE_TOP,
+            endY = DockSkyLayout.HEIGHT,
+        ),
+    )
 }
 
 /**
@@ -297,11 +302,15 @@ private fun DrawScope.drawCornerShade() {
     drawContext.canvas.restore()
 }
 
-/** The sky both home skies share: gradient and glow, stars, the day veil (on the sky only, so the sun stays bright), moon and sun. */
-private fun DrawScope.drawSkyAndBodies(scene: HomeSkyScene) {
-    drawSkyGradient(scene.look, scene.glowX)
+/**
+ * The sky the home screens share: gradient and glow (placed as [shape] says), stars, the day veil (on the
+ * sky only, so the sun stays bright), whatever [underBodies] adds to the sky itself, then moon and sun.
+ */
+fun DrawScope.drawSkyAndBodies(scene: HomeSkyScene, shape: SkyShape = STANDARD_SKY, underBodies: DrawScope.() -> Unit = {}) {
+    drawSkyGradient(scene.look, scene.glowX, shape)
     drawStars(scene.look)
     if (scene.dim > 0f) drawRect(Color.Black.copy(alpha = scene.dim))
+    underBodies()
     if (scene.bodyAlpha > 0f) {
         scene.moon?.let { drawMoon(it, scene.phase, scene.bodyAlpha) }
         scene.sun?.let { drawSun(it, Color(sunColour(scene.sunElevationDeg)), scene.bodyAlpha) }

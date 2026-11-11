@@ -6,7 +6,7 @@ It's the photo you picked in the mockup: the original file, checked by its finge
 
 ## How it's used (your decisions and my calls are in the plan)
 
-- **The crop:** the top 16:9 of the photo (the full width, 7114 × 4002 pixels from the top), resized to the TV's 1920 × 1080. Rundle's summit sits about a third of the way down, so the sun's arc passes over it.
+- **The crop:** the top 16:9 of the photo (the full width, 7114 × 4002 pixels from the top), shrunk to the TV's 1920 × 1080 by the prep tool (more carefully than `sips`, so it stays sharp), with the land lightly sharpened and saved at high quality. Rundle's summit sits about a third of the way down, so the sun's arc passes over it.
 - **What's changed:** the photo's own sky is cut away and replaced by the app's live sky, and its colours change with the time of day. CC BY-SA asks for that to be said, so the credit in Settings says it.
 - **What stays on the Mac:** the original is deleted once the TV copies are made. The TV copies are kept out of git; the script can make them again. CC BY-SA also means that if you ever share the TV copies, they carry the same licence.
 

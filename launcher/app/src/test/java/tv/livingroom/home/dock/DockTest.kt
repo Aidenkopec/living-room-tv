@@ -5,6 +5,8 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import tv.livingroom.home.apps.DOCK_BANNER_H_PX
+import tv.livingroom.home.apps.DOCK_BANNER_W_PX
 import tv.livingroom.home.apps.HdmiInput
 import tv.livingroom.home.apps.RowItem
 import tv.livingroom.home.apps.TvApp
@@ -169,5 +171,18 @@ class DockTest {
     fun theOtherLook() {
         assertEquals(HomeLayout.LIVING_SKY, HomeLayout.MOUNTAINS.other)
         assertEquals(HomeLayout.MOUNTAINS, HomeLayout.LIVING_SKY.other)
+    }
+
+    @Test
+    fun dockBannersAreMadeAtTheSelectedTilesPixels() {
+        // 2 px per dp on the TV: the selected tile is 104 x 58.5 dp.
+        assertEquals(dockTileWidth(DOCK_TALLEST, square = false) * 2, DOCK_BANNER_W_PX.toFloat(), 0f)
+        assertEquals(DOCK_TALLEST * 2, DOCK_BANNER_H_PX.toFloat(), 0f)
+    }
+
+    @Test
+    fun theSmallestTileShrinksTheDockBannerLessThanTwice() {
+        // Android's filtered drawing skips pixels past a 2x shrink, so the smallest tile must stay under it.
+        assertTrue(DOCK_TALLEST / dockHeightAt(10f) < 2f)
     }
 }

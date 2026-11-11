@@ -8,7 +8,7 @@
 # It only turns apps back on, reinstalls removed apps (by opening their Play
 # Store page for you to press Install), and resets the home screen,
 # screensaver and changed settings (such as how long the TV waits before it
-# sleeps). The only thing it ever deletes is our own
+# sleeps, and its time zone). The only thing it ever deletes is our own
 # home screen app (Phase 2), after switching off its Home-button service
 # and taking back its usage access and notification access (Google's home
 # keeps its own notification access).
@@ -58,6 +58,11 @@ STOCK_SCREENSAVER=com.google.android.apps.tv.dreamx/.service.Backdrop
 # Settings changed directly, one per line: namespace key stock_value.
 # Phase 3: the TV sleeps after 2 hours untouched instead of 20 minutes.
 SETTINGS_CHANGED="${SETTINGS_CHANGED:-secure sleep_timeout 1200000}"
+
+# The time zone picked at setup. The TV is set to Regina instead, because its
+# built-in time zone rules (2023a, never updated) still move Alberta's clocks
+# back in November; putting Edmonton back brings that wrong hour back.
+STOCK_TIME_ZONE=America/Edmonton
 
 APPLY=0
 case "${1:-}" in
@@ -195,6 +200,14 @@ while read -r ns key value; do
     act "settings put $ns $key $value" settings put "$ns" "$key" "$value"
   fi
 done <<<"$SETTINGS_CHANGED"
+
+# The shell can't use "cmd time_zone_detector" (no SUGGEST_MANUAL_TIME_AND_ZONE),
+# but holds SET_TIME_ZONE: alarm call 3 is setTimeZone on this TV's Android 12.
+TIME_ZONE_NOW="$(tv getprop persist.sys.timezone)"
+if [ "$TIME_ZONE_NOW" != "$STOCK_TIME_ZONE" ]; then
+  act "time zone back to $STOCK_TIME_ZONE (service call alarm 3 s16 $STOCK_TIME_ZONE)" \
+    service call alarm 3 s16 "$STOCK_TIME_ZONE"
+fi
 
 # Hisense consents were changed in the TV's menus. "Product Improvement" lives
 # inside Hisense's own app, so writing the Alexa setting alone would leave the

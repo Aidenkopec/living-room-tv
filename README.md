@@ -40,7 +40,7 @@ It does four main things:
   - **Weather:** Open-Meteo.
 - Drawing full-screen gradients every frame was too slow on this GPU. So each minute's sky is painted once, off the main thread, into a single bitmap, and that bitmap is drawn as is.
 - On the dock screen, a real photo of Mount Rundle sits over that sky:
-  - an offline tool (`launcher/photoprep`) cuts away the photo's own sky;
+  - an offline tool (`launcher/photoprep`) shrinks the photo to 1080p and cuts away its own sky;
   - the app re-lights the land for the sun's height;
   - the lake mirrors the live sky row by row.
 
@@ -167,7 +167,7 @@ The switches:
 
 | Path | What's there |
 |---|---|
-| `launcher/app` | The app. Pure logic and its tests are grouped by feature (`sky`, `watch`, `apps`, `dock`, `livingsky`, `screensaver`, …). The Android components named in the manifest sit in the root package. |
+| `launcher/app` | The app. Pure logic and its tests are grouped by feature (`sky`, `watch`, `apps`, `dock`, `livingsky`, `screensaver`, `christmas`, …). The Android components named in the manifest sit in the root package. |
 | `launcher/photoprep` | A JVM tool, run on the Mac, that makes the home photo's sky mask. |
 | `scripts/` | TV scripts, all reading the address from `TV=` or `.tv`. See the table below. |
 | `docs/spec.md` | The design: goals, things it deliberately doesn't do, and each decision and who made it. |
@@ -190,7 +190,7 @@ The scripts:
 - **One TV, one city, English only.** The location lives in [`HomePlace.kt`](launcher/app/src/main/java/tv/livingroom/home/HomePlace.kt). Most text is in Kotlin rather than `strings.xml`.
 - **No ViewModels.** Each screen's state lives in its activity and in remembered Compose state. That's enough for a single-screen launcher that's rebuilt on every Home press.
 - **Sideloaded and signed with a debug key.** An accessibility service that captures the Home key would never pass Play review, and this app is never meant to be published there.
-- **The Home race.** On a Home press, Android also starts Google's launcher on its own, about 100 ms after the key goes down. Living Room usually starts 20–60 ms after that and wins. Rarely, Google's launcher restarts itself and stays on screen. This is documented, not hidden: see [docs/architecture.md](docs/architecture.md).
+- **The Home race.** On a Home press, Android also starts Google's launcher on its own, and after a while in the background that launcher starts itself a second time, covering Living Room. The Home-button service watches for that for a few seconds after each press and brings Living Room back, so Google's launcher can flash briefly. See [docs/architecture.md](docs/architecture.md).
 
 ## Credits
 

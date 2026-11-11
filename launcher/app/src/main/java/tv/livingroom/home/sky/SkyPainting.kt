@@ -48,28 +48,28 @@ fun paintSnow(): ImageBitmap = paint { drawSnow() }
 
 // Each part on its own, sized from the scope: the screensaver's pictures and the home sky (HomeSkyView) share them.
 
-/** The sky's gradient (top, middle, horizon) and the glow on the horizon at [glowX] across. */
-fun DrawScope.drawSkyGradient(look: SkyLook, glowX: Float) {
+/** The sky's gradient (top, middle, horizon) and the glow on the horizon at [glowX] across, placed as [shape] says. */
+fun DrawScope.drawSkyGradient(look: SkyLook, glowX: Float, shape: SkyShape = STANDARD_SKY) {
     val w = size.width
     val h = size.height
     drawRect(
         Brush.verticalGradient(
             0f to Color(look.top),
-            HomeSkyLayout.MIDDLE_AT to Color(look.middle),
-            HomeSkyLayout.HORIZON_AT to Color(look.horizon),
+            shape.middleAt to Color(look.middle),
+            shape.horizonAt to Color(look.horizon),
         ),
     )
     if (look.glowAlpha > 0f) {
-        val centre = Offset(w * glowX, h * HomeSkyLayout.GLOW_Y)
-        withTransform({ scale(1f, HomeSkyLayout.GLOW_SQUASH, centre) }) {
+        val centre = Offset(w * glowX, h * shape.glowY)
+        withTransform({ scale(1f, shape.glowSquash, centre) }) {
             drawCircle(
                 Brush.radialGradient(
                     0f to Color(look.glow).copy(alpha = look.glowAlpha),
                     1f to Color.Transparent,
                     center = centre,
-                    radius = w * HomeSkyLayout.GLOW_RADIUS,
+                    radius = w * shape.glowRadius,
                 ),
-                radius = w * HomeSkyLayout.GLOW_RADIUS,
+                radius = w * shape.glowRadius,
                 center = centre,
             )
         }

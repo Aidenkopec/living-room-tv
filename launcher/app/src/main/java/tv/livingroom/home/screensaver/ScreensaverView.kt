@@ -1,6 +1,7 @@
 package tv.livingroom.home.screensaver
 
 import android.os.SystemClock
+import android.provider.Settings
 import android.text.format.DateFormat
 import android.util.Log
 import androidx.compose.animation.core.Animatable
@@ -51,6 +52,12 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import tv.livingroom.home.TAG
+import tv.livingroom.home.christmas.FiresideControls
+import tv.livingroom.home.christmas.FiresideRemote
+import tv.livingroom.home.christmas.FiresideRoom
+import tv.livingroom.home.christmas.firesideScene
+import tv.livingroom.home.christmas.loadStockingNames
+import tv.livingroom.home.settings.FiresideGifts
 import tv.livingroom.home.settings.HomePrefs
 import tv.livingroom.home.sky.drawWeatherLayer
 import tv.livingroom.home.sky.paintClouds
@@ -62,22 +69,24 @@ import tv.livingroom.home.weather.WeatherSource
 import tv.livingroom.home.weather.cornerWeather
 
 /**
- * The screensaver, for the real one ([ScreensaverService]) and the preview:
- * Living sky around sunrise and sunset (or whenever there are no photos),
- * Beautiful places the rest of the time, dimmed late at night.
- * [clock] gives the time (a test switch can pretend); [weatherCode] stands in
- * for the real weather in the sky; [offAfterMin] is the late-night turn-off.
- * [onDimChange] asks for Android's dimming; [onTurnOffDue] means it's late
- * and the screensaver has shown long enough: time for the TV to sleep.
+ * The screensaver, for the real one ([ScreensaverService]) and the preview: with [SaverChoices.fireside],
+ * Fireside (the Christmas one), falling back to the everyday screensaver if its pictures can't be made;
+ * otherwise Living sky around sunrise and sunset (or whenever there are no photos), Beautiful places the rest
+ * of the time, dimmed late at night. [clock] gives the time (a test switch can pretend); [choices] also hold
+ * the weather to show instead of the real one and the late-night turn-off. [onDimChange] asks for Android's
+ * dimming; [onTurnOffDue] means it's late and the screensaver has shown long enough: time for the TV to sleep.
+ * [remote] hands the remote's arrows and OK to Fireside while it shows.
  */
 @Composable
-fun Screensaver(clock: () -> ZonedDateTime, weatherCode: Int?, offAfterMin: Int, onDimChange: (Boolean) -> Unit, onTurnOffDue: () -> Unit) {
+fun Screensaver(
+    clock: () -> ZonedDateTime,
+    choices: SaverChoices,
+    onDimChange: (Boolean) -> Unit,
+    onTurnOffDue: () -> Unit,
+    remote: FiresideRemote? = null,
+) {
     val context = LocalContext.current
     val settings = remember { HomePrefs.saverSettings(context) }
-    val photos = remember { PhotoLoader.list(context) }
-    val weatherOn = remember { HomePrefs.weatherOn(context) }
-    val is24Hour = remember { DateFormat.is24HourFormat(context) }
-    val weather by WeatherSource.now.collectAsState()
     val startedAt = remember { clock() }
     var now by remember { mutableStateOf(startedAt) }
 
@@ -90,20 +99,126 @@ fun Screensaver(clock: () -> ZonedDateTime, weatherCode: Int?, offAfterMin: Int,
         }
     }
 
+    var turnedOff by remember { mutableStateOf(false) }
+    val screenOffMs =
+        remember { Settings.System.getLong(context.contentResolver, Settings.System.SCREEN_OFF_TIMEOUT, DEFAULT_SCREEN_OFF_MS) }
+    LaunchedEffect(now) {
+        val held = turnOffHeldByPress(remote?.lastTakenMs, SystemClock.elapsedRealtime(), screenOffMs)
+        if (!turnedOff && !held && lateNightOffDue(startedAt, now, settings.lateNightOn, choices.offAfterMin)) {
+            turnedOff = true
+            Log.i(TAG, "Screensaver: late night, shown for ${choices.offAfterMin} min: turning the TV off")
+            onTurnOffDue()
+        }
+    }
+
+    var firesideFailed by remember { mutableStateOf(false) }
+    if (showsFireside(choices.fireside, firesideFailed)) {
+        val controls = FiresideControls(
+            remote,
+            choices.santaAt,
+            choices.moment,
+            giftsLeft = remember { FiresideGifts.left(context) },
+            onGiftsLeft = { FiresideGifts.setLeft(context) },
+        )
+        FiresideSaver(now, choices.weatherCode, settings, onDimChange, controls) {
+            Log.i(TAG, "Screensaver: Fireside couldn't be shown; the everyday screensaver instead")
+            firesideFailed = true
+        }
+    } else {
+        EverydaySaver(clock, now, choices.weatherCode, settings, onDimChange)
+    }
+}
+
+/** Fireside at [now], with [weatherCode] in its window (null: the real weather). It dims late at night, as the everyday one does. */
+@Composable
+private fun FiresideSaver(
+    now: ZonedDateTime,
+    weatherCode: Int?,
+    settings: SaverSettings,
+    onDimChange: (Boolean) -> Unit,
+    controls: FiresideControls,
+    onFailed: () -> Unit,
+) {
+    val context = LocalContext.current
+    val names = remember { loadStockingNames(context) }
+    val weatherOn = remember { HomePrefs.weatherOn(context) }
+    val weather by WeatherSource.now.collectAsState()
+    val code = weatherCode ?: weather?.takeIf { cornerWeather(it, System.currentTimeMillis(), weatherOn) != null }?.code
+    val scene = remember(now, code, settings.lateNightOn) {
+        runCatching { firesideScene(now, code, settings.lateNightOn) }.onFailure { Log.e(TAG, "Fireside: no scene", it) }.getOrNull()
+    }
+    if (scene == null) {
+        LaunchedEffect(Unit) { onFailed() }
+        return
+    }
+    LaunchedEffect(scene.late) { onDimChange(scene.late) }
+    val shade = remember { paintShade() }
+    CompositionLocalProvider(LocalContentColor provides Color.White) {
+        Box(Modifier.fillMaxSize().background(Color.Black)) {
+            FiresideRoom(scene, names, onFailed, controls = controls)
+            Spacer(
+                Modifier.fillMaxSize().drawBehind {
+                    drawImage(shade, dstSize = IntSize(size.width.toInt(), size.height.toInt()), filterQuality = FilterQuality.Low)
+                    if (scene.late) drawRect(Color.Black.copy(alpha = LATE_DIM))
+                },
+            )
+            SaverWords(
+                now,
+                scene.late,
+                cornerWeather(weather, System.currentTimeMillis(), weatherOn),
+                Modifier.align(Alignment.BottomStart),
+            )
+        }
+    }
+}
+
+/** The big clock and, unless it's [late] (then just a small faint clock), the date and [weather] under it. */
+@Composable
+private fun SaverWords(now: ZonedDateTime, late: Boolean, weather: String?, modifier: Modifier) {
+    val context = LocalContext.current
+    val is24Hour = remember { DateFormat.is24HourFormat(context) }
+    val clockText = saverClock(now.toLocalTime(), is24Hour)
+    if (late) {
+        Text(
+            clockText,
+            color = Color.White.copy(alpha = 0.45f),
+            fontSize = 48.sp,
+            fontWeight = FontWeight.W200,
+            modifier = modifier.padding(start = 48.dp, bottom = 40.dp),
+        )
+    } else {
+        Column(modifier.padding(start = 48.dp, bottom = 40.dp)) {
+            Text(clockText, fontSize = 77.sp, lineHeight = 77.sp, fontWeight = FontWeight.W200, letterSpacing = (-0.045).em)
+            Text(
+                saverDateLine(now.toLocalDate(), weather),
+                color = Color.White.copy(alpha = 0.85f),
+                fontSize = 16.sp,
+                modifier = Modifier.padding(top = 6.dp),
+            )
+        }
+    }
+}
+
+/** Living sky and Beautiful places, at [now] (moving on each minute; [clock] for the time within it). */
+@Composable
+private fun EverydaySaver(
+    clock: () -> ZonedDateTime,
+    now: ZonedDateTime,
+    weatherCode: Int?,
+    settings: SaverSettings,
+    onDimChange: (Boolean) -> Unit,
+) {
+    val context = LocalContext.current
+    val photos = remember { PhotoLoader.list(context) }
+    val weatherOn = remember { HomePrefs.weatherOn(context) }
+    val weather by WeatherSource.now.collectAsState()
+
     // Photos that failed to load; when none of the right kind are left (or the build has none), the sky.
     val broken = remember { mutableStateSetOf<Int>() }
     val scene = sceneToShow(saverScene(now, settings.skyOn, settings.lateNightOn), photos, broken)
     val late = scene.style == SaverStyle.LATE_NIGHT
 
     LaunchedEffect(late) { onDimChange(late) }
-    var turnedOff by remember { mutableStateOf(false) }
-    LaunchedEffect(now) {
-        if (!turnedOff && lateNightOffDue(startedAt, now, settings.lateNightOn, offAfterMin)) {
-            turnedOff = true
-            Log.i(TAG, "Screensaver: late night, shown for $offAfterMin min: turning the TV off")
-            onTurnOffDue()
-        }
-    }
 
     val skyShown = scene.style == SaverStyle.LIVING_SKY
     val slides = remember { PhotoSlides() }
@@ -200,25 +315,8 @@ fun Screensaver(clock: () -> ZonedDateTime, weatherCode: Int?, offAfterMin: Int,
                     if (late) drawRect(Color.Black.copy(alpha = LATE_DIM))
                 },
             )
-            val clockText = saverClock(now.toLocalTime(), is24Hour)
-            if (late) {
-                Text(
-                    clockText,
-                    color = Color.White.copy(alpha = 0.45f),
-                    fontSize = 48.sp,
-                    fontWeight = FontWeight.W200,
-                    modifier = Modifier.align(Alignment.BottomStart).padding(start = 48.dp, bottom = 40.dp),
-                )
-            } else {
-                Column(Modifier.align(Alignment.BottomStart).padding(start = 48.dp, bottom = 40.dp)) {
-                    Text(clockText, fontSize = 77.sp, lineHeight = 77.sp, fontWeight = FontWeight.W200, letterSpacing = (-0.045).em)
-                    Text(
-                        saverDateLine(now.toLocalDate(), cornerWeather(weather, System.currentTimeMillis(), weatherOn)),
-                        color = Color.White.copy(alpha = 0.85f),
-                        fontSize = 16.sp,
-                        modifier = Modifier.padding(top = 6.dp),
-                    )
-                }
+            SaverWords(now, late, cornerWeather(weather, System.currentTimeMillis(), weatherOn), Modifier.align(Alignment.BottomStart))
+            if (!late) {
                 if (current != null && !skyShown) {
                     Column(Modifier.align(Alignment.BottomEnd).padding(end = 40.dp, bottom = 44.dp), horizontalAlignment = Alignment.End) {
                         Text(

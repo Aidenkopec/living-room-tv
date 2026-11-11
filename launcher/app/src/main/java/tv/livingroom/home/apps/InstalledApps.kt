@@ -5,6 +5,8 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
+import android.graphics.drawable.BitmapDrawable
+import android.graphics.drawable.Drawable
 import android.util.Log
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.core.graphics.drawable.toBitmap
@@ -45,13 +47,28 @@ fun lastUpdateTime(pm: PackageManager, packageName: String): Long = try {
 fun loadAppArt(pm: PackageManager, app: TvApp, version: Long): AppArt = try {
     val info = pm.getActivityInfo(ComponentName(app.packageName, app.activityName), 0)
     // Both fall back to the app's own banner and icon.
-    val banner = info.loadBanner(pm)?.toBitmap(BANNER_W_PX, BANNER_H_PX)
+    val art = info.loadBanner(pm)
+    art?.let { Log.i(TAG, "Banner for ${app.packageName}: ${it.intrinsicWidth} x ${it.intrinsicHeight} px") }
+    val banner = art?.toBitmap(BANNER_W_PX, BANNER_H_PX)
+    val dockBanner = art?.let { shrinkSmoothly(it, DOCK_BANNER_W_PX, DOCK_BANNER_H_PX) }
     val icon = if (banner == null) info.loadIcon(pm)?.toBitmap(ICON_PX, ICON_PX) else null
     val glow = (banner ?: icon)?.let { glowColoursOf(it) } ?: NEUTRAL_GLOW
-    AppArt(tileArt(banner?.asImageBitmap(), icon?.asImageBitmap()) { scaleValue(glow.primary, 0.5f) }, glow, version)
+    val tile = tileArt(banner?.asImageBitmap(), icon?.asImageBitmap()) { scaleValue(glow.primary, 0.5f) }
+    AppArt(tile, glow, version, dockTile = dockBanner?.let { TileArt.Banner(it.asImageBitmap()) } ?: tile)
 } catch (e: Exception) {
     Log.w(TAG, "Could not load the picture for ${app.packageName}", e)
     AppArt(null, NEUTRAL_GLOW, ART_FAILED) // Tried again next time.
+}
+
+/**
+ * [drawable] at exactly [w] x [h] px, shrunk in [halvings] steps and one last filtered one, so
+ * no pixel of the app's picture is skipped. A drawing (not a bitmap) is drawn straight at the size.
+ */
+private fun shrinkSmoothly(drawable: Drawable, w: Int, h: Int): Bitmap {
+    val source = (drawable as? BitmapDrawable)?.bitmap?.takeIf { it.config != Bitmap.Config.HARDWARE } ?: return drawable.toBitmap(w, h)
+    var step = source
+    repeat(minOf(halvings(source.width, w), halvings(source.height, h))) { step = step.scale(step.width / 2, step.height / 2) }
+    return step.scale(w, h)
 }
 
 /** Colours from a small copy of [bitmap]; a 32 x 18 sample is plenty. */

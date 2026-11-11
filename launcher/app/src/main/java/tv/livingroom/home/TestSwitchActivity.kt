@@ -4,11 +4,18 @@ import android.app.Activity
 import android.content.Intent
 import android.os.Bundle
 import android.util.Log
+import tv.livingroom.home.screensaver.NextSaver
 import tv.livingroom.home.screensaver.SaverTestSwitch
 import tv.livingroom.home.testswitch.EXTRA_SAVER_AT
+import tv.livingroom.home.testswitch.EXTRA_SAVER_CHRISTMAS
+import tv.livingroom.home.testswitch.EXTRA_SAVER_DOG
+import tv.livingroom.home.testswitch.EXTRA_SAVER_MOMENT
 import tv.livingroom.home.testswitch.EXTRA_SAVER_OFF_MIN
+import tv.livingroom.home.testswitch.EXTRA_SAVER_SANTA
 import tv.livingroom.home.testswitch.EXTRA_SAVER_WEATHER
 import tv.livingroom.home.testswitch.HomeTestSwitch
+import tv.livingroom.home.testswitch.momentValues
+import tv.livingroom.home.testswitch.onOffValue
 import tv.livingroom.home.testswitch.parseTestSwitches
 
 /**
@@ -35,14 +42,20 @@ class TestSwitchActivity : Activity() {
         }
         switches.saver?.let { saver ->
             if (saver.nextOnly) {
-                SaverTestSwitch.setForNextSaver(saver.at, saver.offAfterMin)
+                SaverTestSwitch.setForNextSaver(
+                    NextSaver(saver.at, saver.offAfterMin, saver.christmas, saver.weatherCode, saver.santa, saver.moment),
+                )
             } else {
                 startActivity(
                     Intent(this, ScreensaverPreviewActivity::class.java)
                         .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                         .putExtra(EXTRA_SAVER_AT, saver.at?.toString())
                         .putExtra(EXTRA_SAVER_WEATHER, saver.weatherCode ?: -1)
-                        .putExtra(EXTRA_SAVER_OFF_MIN, saver.offAfterMin ?: -1),
+                        .putExtra(EXTRA_SAVER_OFF_MIN, saver.offAfterMin ?: -1)
+                        .putExtra(EXTRA_SAVER_CHRISTMAS, onOffValue(saver.christmas))
+                        .putExtra(EXTRA_SAVER_SANTA, saver.santa ?: -1)
+                        .putExtra(EXTRA_SAVER_MOMENT, momentValues(saver.moment).first)
+                        .putExtra(EXTRA_SAVER_DOG, momentValues(saver.moment).second),
                 )
             }
         }

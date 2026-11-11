@@ -11,6 +11,8 @@ launcher/local.properties
 launcher/app/src/main/assets/screensaver/
 # The home screen photo's two files: made by scripts/fetch-home-photo.sh, kept out of git
 launcher/app/src/main/assets/home/
+# The Christmas stockings' names: local only, never published
+launcher/app/src/main/assets/christmas/
 
 # Your TV's address, read by scripts/lib/tv.sh: local only
 .tv

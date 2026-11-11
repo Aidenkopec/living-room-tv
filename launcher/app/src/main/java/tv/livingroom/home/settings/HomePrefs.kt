@@ -18,6 +18,13 @@ object HomePrefs {
         prefs(context).edit { putString(HOME_LAYOUT, layout.key) }
     }
 
+    /** Whether the Christmas theme is on (off until it's switched on); the chosen home screen is kept for when it's off again. */
+    fun christmasOn(context: Context): Boolean = prefs(context).getBoolean(CHRISTMAS_ON, false)
+
+    fun setChristmasOn(context: Context, on: Boolean) {
+        prefs(context).edit { putBoolean(CHRISTMAS_ON, on) }
+    }
+
     fun weatherOn(context: Context): Boolean = prefs(context).getBoolean(WEATHER_ON, true)
 
     fun setWeatherOn(context: Context, on: Boolean) {
@@ -78,6 +85,7 @@ object HomePrefs {
     }
 
     private const val HOME_LAYOUT = "home_layout"
+    private const val CHRISTMAS_ON = "christmas_on"
     private const val WEATHER_ON = "weather_on"
     private const val SAVER_SKY_ON = "saver_sky_on"
     private const val SAVER_LATE_NIGHT_ON = "saver_late_night_on"
@@ -86,4 +94,17 @@ object HomePrefs {
     private const val ROW_ORDER_KEY = "row_order"
     private const val ROW_HIDDEN_KEY = "row_hidden"
     private const val REMOVED_PREFIX = "removed_show."
+}
+
+/** Whether Santa has left his gifts in Fireside (filled stockings, a parcel, two bones): they stay until his next visit. */
+object FiresideGifts {
+    private fun prefs(context: Context) = context.applicationContext.getSharedPreferences("home", Context.MODE_PRIVATE)
+
+    fun left(context: Context): Boolean = prefs(context).getBoolean(GIFTS_LEFT, false)
+
+    fun setLeft(context: Context) {
+        prefs(context).edit().putBoolean(GIFTS_LEFT, true).apply()
+    }
+
+    private const val GIFTS_LEFT = "fireside_gifts_left"
 }

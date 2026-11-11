@@ -63,4 +63,23 @@ class TileArtTest {
     fun retriesArtThatFailedToLoad() {
         assertTrue(needsArtReload(AppArt(null, NEUTRAL_GLOW, version = ART_FAILED), lastUpdateTime = 1_000L))
     }
+
+    @Test
+    fun theDockTileIsTheSameTileUnlessOneIsMade() {
+        val art = AppArt(TileArt.Banner(banner), NEUTRAL_GLOW, version = 1L)
+        assertEquals(art.tile, art.dockTile)
+        val small = FakeImage()
+        assertEquals(TileArt.Banner(small), art.copy(dockTile = TileArt.Banner(small)).dockTile)
+    }
+
+    @Test
+    fun halvingsStopBeforeTheLastStepWouldShrinkTwice() {
+        assertEquals(0, halvings(320, 208)) // A TV banner (320 x 180) to the dock tile: one 1.5x step.
+        assertEquals(0, halvings(208, 208))
+        assertEquals(1, halvings(640, 208)) // 640 -> 320, then 1.5x.
+        assertEquals(1, halvings(416, 208)) // 416 -> 208 exactly.
+        assertEquals(2, halvings(1280, 208))
+        assertEquals(0, halvings(100, 208)) // Growing: no halvings.
+        assertEquals(0, halvings(100, 0))
+    }
 }

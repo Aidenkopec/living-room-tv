@@ -39,6 +39,11 @@ class SeenRow(private var keys: List<String> = emptyList(), private var resumes:
     }
 }
 
-/** The time the screen shows: the real [clock], or a test switch's time ([HomeOverrides.at] wins over [HomeOverrides.hour]). */
-fun shownTime(clock: LocalDateTime, overrides: HomeOverrides?): LocalDateTime =
-    overrides?.at?.let { clock.with(it) } ?: overrides?.hour?.let { clock.withHour(it) } ?: clock
+/**
+ * The time the screen shows: the real [clock], or a test switch's time ([HomeOverrides.at] wins over
+ * [HomeOverrides.hour]) and date ([HomeOverrides.date]).
+ */
+fun shownTime(clock: LocalDateTime, overrides: HomeOverrides?): LocalDateTime {
+    val day = overrides?.date?.let { clock.with(it) } ?: clock
+    return overrides?.at?.let { day.with(it) } ?: overrides?.hour?.let { day.withHour(it) } ?: day
+}

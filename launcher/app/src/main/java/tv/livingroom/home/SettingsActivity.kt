@@ -36,10 +36,13 @@ import tv.livingroom.home.sky.HomePhoto
 import tv.livingroom.home.sky.HomePhotoLoader
 import tv.livingroom.home.sky.sunTimes
 import tv.livingroom.home.testswitch.EXTRA_SAVER_AT
+import tv.livingroom.home.testswitch.EXTRA_SAVER_CHRISTMAS
+import tv.livingroom.home.testswitch.onOffValue
 
 /** The home screen's own settings, opened from a long-press menu. Back returns home. */
 class SettingsActivity : ComponentActivity() {
     private val layout = mutableStateOf(DEFAULT_LAYOUT)
+    private val christmasOn = mutableStateOf(false)
     private val weatherOn = mutableStateOf(true)
     private val rowSettings = mutableStateOf(RowSettings())
     private val tiles = mutableStateOf<List<RowItem>>(emptyList())
@@ -59,6 +62,7 @@ class SettingsActivity : ComponentActivity() {
         setContent {
             SettingsScreen(
                 layout = layout.value,
+                christmasOn = christmasOn.value,
                 weatherOn = weatherOn.value,
                 tiles = tiles.value,
                 hidden = rowSettings.value.hidden,
@@ -72,9 +76,14 @@ class SettingsActivity : ComponentActivity() {
                 onSaverLateNight = { changeSaver { it.copy(lateNightOn = !it.lateNightOn) } },
                 onPreviewSky = { preview(sunTimes(LocalDate.now(), ZoneId.systemDefault()).sunset.toLocalTime()) },
                 onPreviewPlaces = { preview(LocalTime.of(11, 15)) },
+                onPreviewFireside = { preview(null, fireside = true) },
                 onLayout = {
                     layout.value = layout.value.other
                     HomePrefs.setHomeLayout(this, layout.value)
+                },
+                onChristmas = {
+                    christmasOn.value = !christmasOn.value
+                    HomePrefs.setChristmasOn(this, christmasOn.value)
                 },
                 onWeather = {
                     weatherOn.value = !weatherOn.value
@@ -95,6 +104,7 @@ class SettingsActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
         layout.value = HomePrefs.homeLayout(this)
+        christmasOn.value = HomePrefs.christmasOn(this)
         weatherOn.value = HomePrefs.weatherOn(this)
         rowSettings.value = HomePrefs.rowSettings(this)
         saver.value = HomePrefs.saverSettings(this)
@@ -122,11 +132,12 @@ class SettingsActivity : ComponentActivity() {
         HomePrefs.setSaverSettings(this, saver.value)
     }
 
-    /** The screensaver as it looks at [at] today: Living sky at sunset, Beautiful places at 11:15 AM. */
-    private fun preview(at: LocalTime) {
+    /** The screensaver as it looks at [at] today (null: now): Living sky at sunset, Beautiful places at 11:15 AM, or [fireside]. */
+    private fun preview(at: LocalTime?, fireside: Boolean = false) {
         startActivity(
             Intent(this, ScreensaverPreviewActivity::class.java)
-                .putExtra(EXTRA_SAVER_AT, at.withSecond(0).withNano(0).toString()),
+                .putExtra(EXTRA_SAVER_AT, at?.withSecond(0)?.withNano(0)?.toString())
+                .putExtra(EXTRA_SAVER_CHRISTMAS, onOffValue(fireside)),
         )
     }
     private fun changeRow(change: (RowSettings) -> RowSettings) {

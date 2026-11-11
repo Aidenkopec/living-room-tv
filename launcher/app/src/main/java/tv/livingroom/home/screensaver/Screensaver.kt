@@ -7,6 +7,7 @@ import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 import kotlin.math.roundToInt
+import tv.livingroom.home.christmas.AskedMoment
 import tv.livingroom.home.sky.sunTimes
 
 /** Which photos suit the time of day (the list tags each one). */
@@ -20,6 +21,25 @@ data class SaverScene(val style: SaverStyle, val mood: PhotoMood)
 
 /** The screensaver switches in Settings: Living sky at sunrise and sunset, and the dimmed late night with its turn-off. */
 data class SaverSettings(val skyOn: Boolean = true, val lateNightOn: Boolean = true)
+
+/**
+ * What a screensaver is asked to show: [weatherCode] instead of the real weather (null: the real one), the
+ * late-night turn-off after [offAfterMin] minutes, and Fireside, the Christmas screensaver, if [fireside], with (from a
+ * test switch) Santa coming [santaAt] seconds in or a dog [moment] soon.
+ */
+data class SaverChoices(
+    val weatherCode: Int? = null,
+    val offAfterMin: Int = 30,
+    val fireside: Boolean = false,
+    val santaAt: Double? = null,
+    val moment: AskedMoment? = null,
+)
+
+/** Whether Fireside shows: when it's [wanted], until it has [failed] (its pictures couldn't be made), then the everyday one. */
+fun showsFireside(wanted: Boolean, failed: Boolean): Boolean = wanted && !failed
+
+/** Whether a screensaver is Fireside: what a test switch or a preview asks for ([override]), else whether Christmas is on. */
+fun saverShowsFireside(christmasOn: Boolean, override: Boolean?): Boolean = override ?: christmasOn
 
 /** Late night is 11 PM to 5 AM. */
 fun isLateNight(time: LocalTime): Boolean = time.hour >= 23 || time.hour < 5
@@ -46,6 +66,17 @@ fun saverScene(now: ZonedDateTime, skyOn: Boolean = true, lateNightOn: Boolean =
 /** True once the screensaver has shown for [offAfterMin] minutes and it's late night: time to turn the TV off. */
 fun lateNightOffDue(startedAt: ZonedDateTime, now: ZonedDateTime, lateNightOn: Boolean, offAfterMin: Int = 30): Boolean =
     lateNightOn && isLateNight(now.toLocalTime()) && Duration.between(startedAt, now) >= Duration.ofMinutes(offAfterMin.toLong())
+
+/**
+ * Whether the late-night turn-off waits because Fireside took a press [lastPressMs] ago, at [nowMs]: Android puts the TV to
+ * standby when a screensaver ends only once the screen-off time ([screenOffMs]) has passed since the last button; ending
+ * sooner wakes the TV to the home screen instead. So it waits until then (it's checked again each minute).
+ */
+fun turnOffHeldByPress(lastPressMs: Long?, nowMs: Long, screenOffMs: Long): Boolean =
+    lastPressMs != null && nowMs - lastPressMs < screenOffMs
+
+/** Android's screen-off time when the setting can't be read: the TV's own, 10 minutes. */
+const val DEFAULT_SCREEN_OFF_MS = 600_000L
 
 /** Living sky's colours: a gradient from [top] through [middle] to [horizon], a [glow] on the horizon, and [stars] (0 to 1). */
 data class SkyLook(val top: Int, val middle: Int, val horizon: Int, val glow: Int, val glowAlpha: Float, val stars: Float)

@@ -83,6 +83,22 @@ object HomeSkyLayout {
 data class SkyArc(val left: Float, val right: Float, val horizon: Float, val top: Float, val morningGlow: Float, val eveningGlow: Float)
 
 /**
+ * Where a sky's colours and glow sit, as fractions of its height (and, for the glow's radius, its
+ * width): the middle colour is reached [middleAt] down and the horizon colour [horizonAt] down; the
+ * glow is centred [glowY] down, [glowRadius] across, squashed to [glowSquash] high.
+ */
+data class SkyShape(val middleAt: Float, val horizonAt: Float, val glowY: Float, val glowRadius: Float, val glowSquash: Float)
+
+/** The screensaver's and both home skies' shape. */
+val STANDARD_SKY = SkyShape(
+    middleAt = HomeSkyLayout.MIDDLE_AT,
+    horizonAt = HomeSkyLayout.HORIZON_AT,
+    glowY = HomeSkyLayout.GLOW_Y,
+    glowRadius = HomeSkyLayout.GLOW_RADIUS,
+    glowSquash = HomeSkyLayout.GLOW_SQUASH,
+)
+
+/**
  * Mountains and dock: the whole 960 x 540 dp screen (1920 x 1080 px) is sky, the
  * ridges in the screensaver's places, and the sun and moon cross the whole width.
  * Shades sit behind the clock and the dock only.
@@ -92,11 +108,13 @@ object DockSkyLayout {
     const val HEIGHT = 540f
 
     /**
-     * The arc spans 200 to 1720 px, rising from the horizon at 650 px only to 150 dp (300 px): a higher moon
-     * at the left would sit behind the clock (the contrast test). The glow sits at the screensaver's sides when
-     * the sun is down.
+     * The arc spans 200 to 1720 px, rising from 500 px only to 150 dp (300 px). Its low ends sit just above the
+     * home photo's skyline, which is painted over the sky: lower, Mount Rundle hid the sun for an hour or more
+     * after sunrise and before sunset (HomePhotoTest checks the sun and moon clear it). Higher, the moon at
+     * the left would sit behind the clock (the contrast test). The glow sits at the screensaver's sides when the
+     * sun is down.
      */
-    val ARC = SkyArc(left = 100f, right = 860f, horizon = 325f, top = 150f, morningGlow = 0.27f, eveningGlow = 0.78f)
+    val ARC = SkyArc(left = 100f, right = 860f, horizon = 250f, top = 150f, morningGlow = 0.27f, eveningGlow = 0.78f)
 
     /**
      * The shade behind the clock and its line: black at [CLOCK_SHADE_ALPHA] over them, fading out from
@@ -175,19 +193,22 @@ fun sunOnScreen(
 
 /**
  * The moon on the arc, or null when it's below the horizon or the sun is 2°
- * or more up. Its x follows its hour angle from −90° to
- * +90°; its y, its height over 30°, both held within the arc.
+ * or more up. Its x follows its hour angle from −90° to +90°; its y, its
+ * height over 30° or over that night's highest if lower (so, like the sun, it
+ * crosses the middle at the arc's top, clear of the land), both held within the arc.
  */
 fun moonOnScreen(moon: MoonPlace, sunElevationDeg: Double, arc: SkyArc = HomeSkyLayout.ARC): SkyPoint? {
     if (moon.elevationDeg <= 0 || sunElevationDeg >= MOON_ONLY_BELOW_SUN) return null
     val across = ((moon.hourAngleDeg + 90) / 180).coerceIn(0.0, 1.0).toFloat()
-    val up = (moon.elevationDeg / 30).coerceIn(0.0, 1.0).toFloat()
+    val up = (moon.elevationDeg / minOf(MOON_HIGH_DEG, moon.highestDeg)).coerceIn(0.0, 1.0).toFloat()
     return SkyPoint(x = arc.left + across * (arc.right - arc.left), y = arc.horizon - up * (arc.horizon - arc.top))
 }
 
 /** The screensaver's sky ([skyLook]), greyed by the [weather]: no stars and a fainter glow under cloud, rain or snow. */
-fun homeSkyLook(elevationDeg: Double, weather: SkyWeather): SkyLook {
-    val clear = skyLook(elevationDeg)
+fun homeSkyLook(elevationDeg: Double, weather: SkyWeather): SkyLook = weatherSky(skyLook(elevationDeg), weather)
+
+/** A [clear] sky greyed by the [weather]: no stars and a fainter glow under cloud, rain or snow. */
+fun weatherSky(clear: SkyLook, weather: SkyWeather): SkyLook {
     val (grey, amount) = when (weather) {
         SkyWeather.CLEAR -> return clear
         SkyWeather.CLOUDY -> 0xFF606676.toInt() to 0.32f
@@ -292,10 +313,12 @@ fun backdropAt(scene: HomeSkyScene, x: Float, y: Float): Int {
  * rain and snow. The photo under the dock is checked with [dockTileOver] in
  * HomePhotoTest, from the real files.
  */
-fun dockBackdropAt(scene: HomeSkyScene, x: Float, y: Float): Int = dockShadesOver(dockSkyAt(scene, x, y), x, y)
+fun dockBackdropAt(scene: HomeSkyScene, x: Float, y: Float, shape: SkyShape = STANDARD_SKY): Int =
+    dockShadesOver(dockSkyAt(scene, x, y, shape), x, y)
 
 /** The dock screen's sky alone at ([x], [y]) dp (what the photo's lake mirrors). */
-fun dockSkyAt(scene: HomeSkyScene, x: Float, y: Float): Int = skyAt(scene, x, y, DockSkyLayout.HEIGHT)
+fun dockSkyAt(scene: HomeSkyScene, x: Float, y: Float, shape: SkyShape = STANDARD_SKY): Int =
+    skyAt(scene, x, y, DockSkyLayout.HEIGHT, shape)
 
 /** [colour] at ([x], [y]) dp with the shades behind the clock and the dock over it. */
 fun dockShadesOver(colour: Int, x: Float, y: Float): Int = over(over(colour, BLACK, clockShade(x, y)), BLACK, bottomShade(y))
@@ -320,22 +343,18 @@ fun bottomShade(y: Float): Float = DockSkyLayout.BOTTOM_SHADE_ALPHA *
     ((y - DockSkyLayout.BOTTOM_SHADE_TOP) / (DockSkyLayout.HEIGHT - DockSkyLayout.BOTTOM_SHADE_TOP)).coerceIn(0f, 1f)
 
 /** The sky's own layers at ([x], [y]) dp in a sky [h] dp tall: gradient and glow, day veil, moon, sun and its glow, clouds. */
-private fun skyAt(scene: HomeSkyScene, x: Float, y: Float, h: Float): Int {
+private fun skyAt(scene: HomeSkyScene, x: Float, y: Float, h: Float, shape: SkyShape = STANDARD_SKY): Int {
     val w = HomeSkyLayout.WIDTH
     val look = scene.look
     val f = y / h
     var c = when {
-        f <= HomeSkyLayout.MIDDLE_AT -> mix(look.top, look.middle, f / HomeSkyLayout.MIDDLE_AT)
-        f <= HomeSkyLayout.HORIZON_AT -> mix(
-            look.middle,
-            look.horizon,
-            (f - HomeSkyLayout.MIDDLE_AT) / (HomeSkyLayout.HORIZON_AT - HomeSkyLayout.MIDDLE_AT),
-        )
+        f <= shape.middleAt -> mix(look.top, look.middle, f / shape.middleAt)
+        f <= shape.horizonAt -> mix(look.middle, look.horizon, (f - shape.middleAt) / (shape.horizonAt - shape.middleAt))
         else -> look.horizon
     }
     if (look.glowAlpha > 0f) {
-        val rx = w * HomeSkyLayout.GLOW_RADIUS
-        val d = distance(x - scene.glowX * w, (y - h * HomeSkyLayout.GLOW_Y) / HomeSkyLayout.GLOW_SQUASH) / rx
+        val rx = w * shape.glowRadius
+        val d = distance(x - scene.glowX * w, (y - h * shape.glowY) / shape.glowSquash) / rx
         c = over(c, look.glow, look.glowAlpha * (1 - d).coerceAtLeast(0f))
     }
     c = over(c, BLACK, scene.dim)
@@ -409,6 +428,7 @@ fun cornerSkyLine(at: ZonedDateTime, is24Hour: Boolean, lat: Double = HomePlace.
 
 private const val SUN_HIDDEN_BELOW = -2.5
 private const val MOON_ONLY_BELOW_SUN = 2.0
+private const val MOON_HIGH_DEG = 30.0
 private const val HORIZON_DEG = -0.833 // Sunrise and sunset: the sun's top edge on the horizon.
 private const val FULL = 0.97
 private const val THIN = 0.03 // A moon thinner than this isn't worth a line.

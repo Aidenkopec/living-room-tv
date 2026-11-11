@@ -7,6 +7,7 @@ import java.time.ZoneId
 import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
 import java.util.Locale
+import kotlin.math.abs
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
@@ -132,6 +133,25 @@ class HomeSkyTest {
         assertEquals((ARC_LEFT + ARC_RIGHT) / 2, p.x, 0.01f)
         assertEquals(HORIZON - (HORIZON - ARC_TOP) * 20f / 30f, p.y, 0.01f)
         assertEquals(ARC_TOP, moonOnScreen(MoonPlace(55.0, 0.0), -10.0)!!.y, 0.01f) // Held at the top.
+    }
+
+    @Test
+    fun lowMoonCrossesTheMiddleAtTheTop() {
+        // A summer full moon only 12° up at its highest still crosses the middle at the arc's top, and is half way up at 6°.
+        assertEquals(ARC_TOP, moonOnScreen(MoonPlace(12.0, 0.0, highestDeg = 12.0), -10.0)!!.y, 0.01f)
+        assertEquals((HORIZON + ARC_TOP) / 2, moonOnScreen(MoonPlace(6.0, -60.0, highestDeg = 12.0), -10.0)!!.y, 0.01f)
+    }
+
+    @Test
+    fun moonsHighestIsItsHeightOnTheMeridian() {
+        // Every 10 minutes through 2026, the Moon's height near its highest (hour angle within 2.5°) matches highestDeg.
+        var time = ZonedDateTime.of(2026, 1, 1, 0, 0, 0, 0, zone)
+        while (time.year == 2026) {
+            val moon = moonPlace(time.toInstant())
+            if (abs(moon.hourAngleDeg) < 2.5) assertEquals("$time", moon.highestDeg, moon.elevationDeg, 0.1)
+            assertTrue("$time", moon.elevationDeg <= moon.highestDeg + 1e-9)
+            time = time.plusMinutes(10)
+        }
     }
 
     @Test

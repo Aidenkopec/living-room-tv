@@ -12,7 +12,7 @@ android {
         minSdk = 31
         targetSdk = 31 // The TV's Android 12.
         // Increases with every build installed on the TV.
-        versionCode = 49
+        versionCode = 69
         versionName = "0.1.$versionCode"
         // The TV is 32-bit ARM only; a Compose library ships one small native file, so only that ABI is packaged.
         ndk { abiFilters += "armeabi-v7a" }

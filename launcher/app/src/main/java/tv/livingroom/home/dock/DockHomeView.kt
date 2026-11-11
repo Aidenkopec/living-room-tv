@@ -9,6 +9,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -29,6 +30,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
@@ -37,8 +39,10 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.TransformOrigin
+import androidx.compose.ui.graphics.drawscope.ContentDrawScope
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.key.KeyEvent
 import androidx.compose.ui.input.key.KeyEventType
@@ -56,6 +60,7 @@ import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
 import androidx.tv.material3.darkColorScheme
 import java.time.ZoneId
+import kotlin.math.round
 import tv.livingroom.home.SettingsActivity
 import tv.livingroom.home.TAG
 import tv.livingroom.home.apps.AppArt
@@ -66,6 +71,25 @@ import tv.livingroom.home.apps.openApp
 import tv.livingroom.home.apps.openGoogleHome
 import tv.livingroom.home.apps.openInput
 import tv.livingroom.home.apps.start
+import tv.livingroom.home.christmas.DockBar
+import tv.livingroom.home.christmas.DockSprites
+import tv.livingroom.home.christmas.DockTop
+import tv.livingroom.home.christmas.DockTwinkle
+import tv.livingroom.home.christmas.MotionClock
+import tv.livingroom.home.christmas.MotionPictures
+import tv.livingroom.home.christmas.TileSpots
+import tv.livingroom.home.christmas.VillageBackdrop
+import tv.livingroom.home.christmas.VillageMotion
+import tv.livingroom.home.christmas.christmasLine
+import tv.livingroom.home.christmas.drawDockGlow
+import tv.livingroom.home.christmas.drawDockLights
+import tv.livingroom.home.christmas.drawDockTop
+import tv.livingroom.home.christmas.drawDockTwinkles
+import tv.livingroom.home.christmas.rememberDockSprites
+import tv.livingroom.home.christmas.rememberMotionClock
+import tv.livingroom.home.christmas.rememberMotionPictures
+import tv.livingroom.home.christmas.rememberVillagePicture
+import tv.livingroom.home.christmas.villageScene
 import tv.livingroom.home.homescreen.Background
 import tv.livingroom.home.homescreen.RefocusWhenTileLeaves
 import tv.livingroom.home.homescreen.minuteClock
@@ -77,6 +101,7 @@ import tv.livingroom.home.homescreen.shownTime
 import tv.livingroom.home.homescreen.startIndex
 import tv.livingroom.home.livingsky.greeting
 import tv.livingroom.home.livingsky.movingTopAreaText
+import tv.livingroom.home.screensaver.SkyWeather
 import tv.livingroom.home.screensaver.saverClock
 import tv.livingroom.home.sky.DOCK_LINE_ALPHA
 import tv.livingroom.home.sky.DockSky
@@ -111,7 +136,8 @@ private val SquareShape = RoundedCornerShape(6.dp) // The tiles' own corners.
  * dock at the bottom. No Continue watching (shows are still saved, for Living
  * sky). The same row, focus rules, long-press menu and test switches as
  * [tv.livingroom.home.livingsky.HomeScreen]: each time [resumes] goes up (every Home press),
- * focus goes back to the app used last.
+ * focus goes back to the app used last. With [christmas], the Christmas village takes the sky's
+ * place, the dock is dressed (snow, holly, fairy lights) and the clock's line counts down to Christmas.
  */
 @Composable
 fun DockHomeScreen(
@@ -119,6 +145,7 @@ fun DockHomeScreen(
     lastOpened: Map<String, Long>,
     overrides: HomeOverrides?,
     resumes: Int,
+    christmas: Boolean = false,
     onMove: (key: String, by: Int) -> Unit,
     onHide: (key: String) -> Unit,
 ) {
@@ -147,10 +174,26 @@ fun DockHomeScreen(
         // No Surface at the root, so text would default to black.
         CompositionLocalProvider(LocalContentColor provides Color.White) {
             Box(Modifier.fillMaxSize().background(Background)) {
-                // Calgary's sky right now, with the weather in it only when the clock's line shows it (on and fresh).
-                val skyScene = remember(now, weather.skyCode) { homeSkyScene(now.atZone(zone), weather.skyCode, arc = DockSkyLayout.ARC) }
-                DockSky(skyScene) // First, so everything else is drawn on top of it.
-                val skyLine = remember(now, is24Hour) { cornerSkyLine(now.atZone(zone), is24Hour) } // Once a minute, not on every move.
+                // First, so everything else is drawn on top of it: the Christmas village, or Calgary's sky right now.
+                // Either has the weather in it only when the clock's line shows it (on and fresh).
+                val village =
+                    remember(now, weather.skyCode, christmas) { if (christmas) villageScene(now.atZone(zone), weather.skyCode) else null }
+                // What moves over the village and on the dock: one clock and one sheet of ready-made pieces for both.
+                val motion = if (village != null) DockMotion(rememberMotionClock(), rememberMotionPictures()) else null
+                if (village != null && motion != null) {
+                    val backdrop = rememberVillagePicture(village)
+                    VillageBackdrop(backdrop)
+                    // A test switch's opening is a new scene: whoever was walking through the old one isn't carried over.
+                    key(overrides) { VillageMotion(village, backdrop, motion.pictures, motion.clock, overrides?.sprites) }
+                } else {
+                    val skyScene =
+                        remember(now, weather.skyCode) { homeSkyScene(now.atZone(zone), weather.skyCode, arc = DockSkyLayout.ARC) }
+                    DockSky(skyScene)
+                }
+                // Once a minute, not on every move. In December the Christmas countdown takes the sky note's place.
+                val skyLine = remember(now, is24Hour, christmas) {
+                    (if (christmas) christmasLine(now.toLocalDate()) else null) ?: cornerSkyLine(now.atZone(zone), is24Hour)
+                }
                 DockClock(saverClock(now.toLocalTime(), is24Hour), dockInfoLine(now.toLocalDate(), weather.corner, skyLine))
                 if (row != null) {
                     val squares = remember(row) { items.map { it !is RowItem.App } }
@@ -160,6 +203,10 @@ fun DockHomeScreen(
                     // a move never recomposes or re-lays out the tiles (too slow on this TV).
                     val slots = remember(squares, separator) { derivedStateOf { dockSlots(squares, at.value, separator) } }
                     val wide = remember(squares, separator) { dockWidth(dockSlots(squares, 0f, separator)) > DOCK_MAX_WIDTH }
+                    // The Christmas dressing's pictures, made for each tile's tallest size (2 px to a dp).
+                    val tallest = remember(squares) { squares.map { dockTileWidth(DOCK_TALLEST, it) * 2 } }
+                    val typicalBar = remember(squares, separator) { dockWidth(dockSlots(squares, (squares.size - 1) / 2f, separator)) * 2 }
+                    val dressing = village?.let { rememberDockSprites(it.look, tallest, typicalBar) }
                     Column(
                         Modifier.align(Alignment.BottomCenter).padding(bottom = DockBottom),
                         horizontalAlignment = Alignment.CenterHorizontally,
@@ -175,9 +222,28 @@ fun DockHomeScreen(
                         Box(
                             Modifier
                                 .size(DOCK_MAX_WIDTH.dp, RingRoom + DOCK_TALLEST.dp + BarInset)
-                                .then(if (wide) Modifier.clipToBounds() else Modifier)
-                                .drawBehind { drawDock(slots.value, separator, focusedIndex) },
+                                .then(
+                                    if (christmas) {
+                                        Modifier.drawWithContent { drawDressedDock(slots.value, separator, focusedIndex, wide, dressing) }
+                                    } else {
+                                        (if (wide) Modifier.clipToBounds() else Modifier).drawBehind {
+                                            drawDock(slots.value, separator, focusedIndex)
+                                        }
+                                    },
+                                ),
                         ) {
+                            // The bulbs' twinkling, in its own layer between the bar and the tiles: only this is redrawn on each frame.
+                            val pictures = motion?.pictures
+                            if (dressing != null && motion != null && pictures != null) {
+                                val twinkle = remember { DockTwinkle() }
+                                Spacer(
+                                    Modifier.matchParentSize().graphicsLayer().drawBehind {
+                                        val t = motion.clock.seconds
+                                        fillDockBar(twinkle.bar, slots.value, focusedIndex)
+                                        dockClip(wide) { drawDockTwinkles(twinkle, dressing, pictures, t) }
+                                    },
+                                )
+                            }
                             items.forEachIndexed { index, item ->
                                 key(item.key) {
                                     val tileModifier = Modifier
@@ -191,7 +257,8 @@ fun DockHomeScreen(
                                             transformOrigin = TransformOrigin(0f, 1f)
                                             scaleX = scale
                                             scaleY = scale
-                                            translationX = (dockLeft(all, focusedIndex) + slot.x).dp.toPx()
+                                            // On a whole pixel: a picture drawn between pixels is blended across two and looks soft.
+                                            translationX = round((dockLeft(all, focusedIndex) + slot.x).dp.toPx())
                                         }
                                         .focusRequester(focusRequesters[index])
                                         .onFocusChanged { if (it.isFocused) selected = item.key }
@@ -210,6 +277,21 @@ fun DockHomeScreen(
                                         tileModifier,
                                     ) { menu = item }
                                 }
+                            }
+                            // Over the tiles, in a layer of its own: the snow on each tile, the holly, and the dog that rides the dock.
+                            if (dressing != null && motion != null) {
+                                val top = remember { DockTop() }
+                                top.snowing = village.sky.weather == SkyWeather.SNOW
+                                Spacer(
+                                    Modifier.matchParentSize().graphicsLayer().drawBehind {
+                                        val t = motion.clock.seconds
+                                        val all = slots.value
+                                        fillTileSpots(top.spots, all, focusedIndex)
+                                        fillDockBar(top.bar, all, focusedIndex)
+                                        if (top.away.cameBack(motion.clock)) top.ride.restart()
+                                        dockClip(wide) { drawDockTop(top, dressing, motion.pictures, t) }
+                                    },
+                                )
                             }
                         }
                     }
@@ -263,6 +345,9 @@ fun DockHomeScreen(
         runCatching { requester?.requestFocus() }.onFailure { Log.w(TAG, "Could not focus tile $index", it) }
     }
 }
+
+/** The clock that moving things follow and the sheet they're cut from ([pictures], null until painted). */
+private class DockMotion(val clock: MotionClock, val pictures: MotionPictures?)
 
 /** The quiet clock at the top left, as on the screensaver (no AM/PM), with one [line] under it. */
 @Composable
@@ -319,7 +404,7 @@ private fun DockTile(item: RowItem, square: Boolean, showLabel: Boolean, art: Ap
     when (item) {
         is RowItem.App -> AppTile(
             item.app.label,
-            art?.tile,
+            art?.dockTile,
             loaded = art != null,
             onClick = { context.openApp(item.app) },
             onLongClick = onLongClick,
@@ -350,10 +435,69 @@ private fun DockTile(item: RowItem, square: Boolean, showLabel: Boolean, art: Ap
     }
 }
 
+/**
+ * The dock dressed for Christmas, back to front: the glow under the selected tile, the bar, the
+ * fairy lights, then the tiles and the layers among them (the bulbs' twinkling under the tiles; the
+ * snow, the holly and the rider over them). Without [dressing] (its pictures aren't painted yet) just
+ * the bar and the tiles. A [wide] dock, which scrolls, is kept inside its box across, but what's on
+ * it may stand above it.
+ */
+private fun ContentDrawScope.drawDressedDock(slots: List<DockSlot>, separator: Int?, focused: Int, wide: Boolean, dressing: DockSprites?) {
+    dockClip(wide) { this@drawDressedDock.drawDockLayers(slots, separator, focused, dressing) }
+}
+
+/** Draws [block], kept inside the dock's box across when the dock is [wide] (it scrolls), with room above and below it. */
+private inline fun DrawScope.dockClip(wide: Boolean, block: DrawScope.() -> Unit) {
+    if (wide) clipRect(top = -2 * size.height, bottom = 2 * size.height, block = block) else block()
+}
+
+/** Puts where the bar is in the dock's box into [bar], in pixels, with its ends on whole pixels. */
+private fun DrawScope.fillDockBar(bar: DockBar, slots: List<DockSlot>, focused: Int) {
+    bar.left = round((dockLeft(slots, focused) - DOCK_PADDING).dp.toPx())
+    bar.top = size.height - BarHeight.toPx()
+    bar.width = round(dockWidth(slots).dp.toPx())
+    bar.height = BarHeight.toPx()
+}
+
+/** [drawDressedDock]'s layers, in order. */
+private fun ContentDrawScope.drawDockLayers(slots: List<DockSlot>, separator: Int?, focused: Int, dressing: DockSprites?) {
+    if (dressing == null) {
+        drawDock(slots, separator, focused)
+        drawContent()
+        return
+    }
+    val tilesLeft = dockLeft(slots, focused)
+    val bar = DockBar().also { fillDockBar(it, slots, focused) }
+    val bottom = size.height - BarInset.toPx()
+    slots.getOrNull(focused)?.let { selected ->
+        val middle = round((tilesLeft + selected.x).dp.toPx()) + selected.width.dp.toPx() / 2
+        drawDockGlow(dressing, middle, bottom - selected.height.dp.toPx() / 2, selected.width.dp.toPx())
+    }
+    drawDock(slots, separator, focused)
+    drawDockLights(dressing, bar)
+    drawContent()
+}
+
+/** Tells the dock's top layer where every tile is on this frame (pixels in the dock's box) and which is selected. */
+private fun DrawScope.fillTileSpots(spots: TileSpots, slots: List<DockSlot>, focused: Int) {
+    val tilesLeft = dockLeft(slots, focused)
+    val bottom = size.height - BarInset.toPx()
+    spots.resize(slots.size)
+    spots.focused = focused
+    for (i in slots.indices) {
+        val slot = slots[i]
+        spots.left[i] = round((tilesLeft + slot.x).dp.toPx())
+        spots.top[i] = bottom - slot.height.dp.toPx()
+        spots.scale[i] = slot.height / DOCK_TALLEST
+        spots.tallest[i] = slot.width / slot.height * DOCK_TALLEST * 2 // The dressing is measured 2 units to a dp.
+    }
+}
+
 /** The see-through bar behind the tiles (as wide as they are, [slots]) and the thin line before [separator], if any. */
 private fun DrawScope.drawDock(slots: List<DockSlot>, separator: Int?, focused: Int) {
-    val left = (dockLeft(slots, focused) - DOCK_PADDING).dp.toPx()
-    val width = dockWidth(slots).dp.toPx()
+    // Edges on whole pixels, so the bar's thin outline is drawn crisp instead of smeared across two.
+    val left = round((dockLeft(slots, focused) - DOCK_PADDING).dp.toPx())
+    val width = round(dockWidth(slots).dp.toPx())
     val bar = BarHeight.toPx()
     val top = size.height - bar
     val corner = CornerRadius(BarCorner.toPx())
@@ -367,7 +511,7 @@ private fun DrawScope.drawDock(slots: List<DockSlot>, separator: Int?, focused: 
         style = Stroke(edge),
     )
     if (separator != null) {
-        val x = (dockLeft(slots, focused) + dockSeparatorX(slots, separator)).dp.toPx()
+        val x = round((dockLeft(slots, focused) + dockSeparatorX(slots, separator)).dp.toPx())
         val line = SeparatorHeight.toPx()
         drawRect(Color.White.copy(alpha = 0.2f), Offset(x, top + (bar - line) / 2), Size(edge, line))
     }

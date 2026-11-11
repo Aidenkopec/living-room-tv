@@ -1,6 +1,7 @@
 package tv.livingroom.home.sky
 
 import java.time.Instant
+import kotlin.math.abs
 import kotlin.math.asin
 import kotlin.math.atan2
 import kotlin.math.cos
@@ -18,10 +19,10 @@ import tv.livingroom.home.HomePlace
 data class MoonPhase(val ageDays: Double, val lit: Double, val waxing: Boolean)
 
 /**
- * The Moon's height above the horizon as seen from the ground, and its hour angle (−180 to 180°:
- * negative in the east, 0 at its highest).
+ * The Moon's height above the horizon as seen from the ground, its hour angle (−180 to 180°:
+ * negative in the east, 0 at its highest), and the height it reaches at that highest point.
  */
-data class MoonPlace(val elevationDeg: Double, val hourAngleDeg: Double)
+data class MoonPlace(val elevationDeg: Double, val hourAngleDeg: Double, val highestDeg: Double = 90.0)
 
 /** The Moon's phase at [at], from how far it is from the Sun along the sky. */
 fun moonPhase(at: Instant): MoonPhase {
@@ -45,9 +46,14 @@ fun moonPlace(at: Instant, lat: Double = HomePlace.LATITUDE, lon: Double = HomeP
     val hourAngle = (siderealDeg - deg(rightAscension)).mod(360.0).let { if (it > 180) it - 360 else it }
     val sinHeight = sin(rad(lat)) * sin(declination) + cos(rad(lat)) * cos(declination) * cos(rad(hourAngle))
     val geocentric = asin(sinHeight.coerceIn(-1.0, 1.0))
+    val highest = rad(90 - abs(lat - deg(declination)))
     // Seen from the ground rather than the Earth's centre, the Moon sits about a degree lower.
     val parallax = asin(EARTH_RADIUS_KM / moon.distanceKm)
-    return MoonPlace(elevationDeg = deg(geocentric - parallax * cos(geocentric)), hourAngleDeg = hourAngle)
+    return MoonPlace(
+        elevationDeg = deg(geocentric - parallax * cos(geocentric)),
+        hourAngleDeg = hourAngle,
+        highestDeg = deg(highest - parallax * cos(highest)),
+    )
 }
 
 /** The Moon's ecliptic longitude and latitude (degrees) and its distance (km). */

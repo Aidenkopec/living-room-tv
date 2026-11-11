@@ -194,6 +194,48 @@ class HomePhotoTest {
         assertEquals(rock, out[40 * w])
     }
 
+    // --- The sun and moon over the real photo ------------------------------------------------
+
+    /**
+     * The land is painted over the sky, so the dock's arc has to keep the sun and moon above the photo's
+     * skyline: the whole sun once it's up, the whole moon once it's 2° up (lower, it sets behind the
+     * mountain as the real one does). Every 5 minutes through the Moon's 18.6-year cycle. Skipped without
+     * the photo files.
+     */
+    @Test
+    fun sunAndMoonClearThePhotosSkyline() {
+        val assets = File("src/main/assets")
+        val photo = parseHomePhoto(File(assets, "home-photo.tsv").readText())!!
+        val layersFile = File(assets, photo.layers)
+        assumeTrue("the photo files aren't made (scripts/fetch-home-photo.sh)", layersFile.exists())
+        val layers = ImageIO.read(layersFile)
+        // The first row of each column that isn't pure sky, in px.
+        val skyline = IntArray(layers.width) { x ->
+            (0 until layers.height).firstOrNull { ((layers.getRGB(x, it) shr 16) and 0xFF) < 255 } ?: layers.height
+        }
+        fun clear(at: SkyPoint, radius: Float): Boolean {
+            val from = ((at.x - radius) * 2).toInt().coerceIn(0, layers.width - 1)
+            val to = ((at.x + radius) * 2).toInt().coerceIn(0, layers.width - 1)
+            return (at.y + radius) * 2 <= (from..to).minOf { skyline[it] }
+        }
+        val zone = ZoneId.of("America/Edmonton")
+        var time = ZonedDateTime.of(2026, 1, 1, 0, 0, 0, 0, zone)
+        while (time.year < 2045) {
+            val scene = homeSkyScene(time, 0, arc = DockSkyLayout.ARC)
+            val sun = scene.sun
+            if (sun != null &&
+                scene.sunElevationDeg >= 0
+            ) {
+                assertTrue("sun behind the land at $time: $sun", clear(sun, HomeSkyLayout.SUN_RADIUS))
+            }
+            val moon = scene.moon
+            if (moon != null && moonPlace(time.toInstant()).elevationDeg >= 2) {
+                assertTrue("moon behind the land at $time: $moon", clear(moon, HomeSkyLayout.MOON_RADIUS))
+            }
+            time = time.plusMinutes(5)
+        }
+    }
+
     // --- The dock's words over the real photo ------------------------------------------------
 
     /**

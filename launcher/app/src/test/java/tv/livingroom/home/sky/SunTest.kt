@@ -25,8 +25,9 @@ class SunTest {
         assertNear(sunset, sun.sunset)
     }
 
+    // Alberta now keeps UTC−6 all year, so a December sunrise comes at about 9:37 by the clock.
     @Test
-    fun decemberSunTimes() = assertSun("2025-12-21", "08:37", "16:31")
+    fun decemberSunTimes() = assertSun("2026-12-21", "09:37", "17:31")
 
     @Test
     fun juneSunTimes() = assertSun("2026-06-21", "05:21", "21:54")

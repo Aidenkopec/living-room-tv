@@ -44,7 +44,7 @@ import tv.livingroom.home.sky.HomePhoto
 private val LineShape = RoundedCornerShape(8.dp)
 
 /**
- * The home screen's settings: which home screen ([layout]), the weather, which tiles show on the
+ * The home screen's settings: which home screen ([layout]), the Christmas theme, the weather, which tiles show on the
  * row, the screensaver, the way back to Google's home screen, and the photo credits. [tiles] are
  * every app and input in row order, hidden ones included; [homeCaught] is whether Living Room
  * catches the Home button right now.
@@ -52,6 +52,7 @@ private val LineShape = RoundedCornerShape(8.dp)
 @Composable
 fun SettingsScreen(
     layout: HomeLayout,
+    christmasOn: Boolean,
     weatherOn: Boolean,
     tiles: List<RowItem>,
     hidden: Set<String>,
@@ -62,11 +63,13 @@ fun SettingsScreen(
     homePhoto: HomePhoto?,
     build: Long,
     onLayout: () -> Unit,
+    onChristmas: () -> Unit,
     onWeather: () -> Unit,
     onSaverSky: () -> Unit,
     onSaverLateNight: () -> Unit,
     onPreviewSky: () -> Unit,
     onPreviewPlaces: () -> Unit,
+    onPreviewFireside: () -> Unit,
     onToggleTile: (key: String) -> Unit,
     onStandardOrder: () -> Unit,
     onSwitchBack: () -> Unit,
@@ -86,6 +89,7 @@ fun SettingsScreen(
             }
             item { Heading("Home screen") }
             item { SettingLine("Look", layoutName(layout), onLayout, Modifier.focusRequester(first)) }
+            item { SettingLine("Christmas", if (christmasOn) "On" else "Off", onChristmas) }
             item { Heading("Weather") }
             item { SettingLine(HomePlace.NAME, if (weatherOn) "On" else "Off", onWeather) }
             item { Heading("Apps on the home screen") }
@@ -98,6 +102,7 @@ fun SettingsScreen(
             item { SettingLine("Late night: dimmed photos, TV off after 30 min", if (saver.lateNightOn) "On" else "Off", onSaverLateNight) }
             item { SettingLine("Preview Living sky", null, onPreviewSky) }
             item { SettingLine("Preview Beautiful places", null, onPreviewPlaces) }
+            item { SettingLine("Preview Fireside", null, onPreviewFireside) }
             item {
                 Text(
                     "The TV's own menus can't choose a screensaver, so going back to Google's is done over ADB " +

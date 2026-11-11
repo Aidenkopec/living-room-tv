@@ -35,6 +35,7 @@ import tv.livingroom.home.settings.HomeLayout
 import tv.livingroom.home.settings.HomePrefs
 import tv.livingroom.home.testswitch.HomeOverrides
 import tv.livingroom.home.testswitch.HomeTestSwitch
+import tv.livingroom.home.testswitch.showsChristmas
 import tv.livingroom.home.watch.WatchCard
 import tv.livingroom.home.watch.WatchStore
 import tv.livingroom.home.watch.key
@@ -49,6 +50,7 @@ class MainActivity : ComponentActivity() {
     private val overrides = mutableStateOf<HomeOverrides?>(null) // From a test switch, for one opening.
     private val sampleShows = mutableStateOf<List<WatchCard>?>(null) // Test switch: placeholder shows, never saved.
     private val layout = mutableStateOf(DEFAULT_LAYOUT)
+    private val christmas = mutableStateOf(false) // The Christmas theme (Settings): the village, whichever look is chosen.
     private val resumes = mutableIntStateOf(0)
     private var apps: List<TvApp> = emptyList()
     private var inputs: List<HdmiInput> = emptyList()
@@ -69,12 +71,14 @@ class MainActivity : ComponentActivity() {
             }
             val onHide = { key: String -> changeRow { it.copy(hidden = it.hidden + key) } }
             // The two home screens (Settings → Look): Living sky with Continue watching, and Mountains and dock.
-            when (layout.value) {
+            // The Christmas theme shows its village on the dock screen, whichever look is chosen.
+            when (if (christmas.value) HomeLayout.MOUNTAINS else layout.value) {
                 HomeLayout.MOUNTAINS -> DockHomeScreen(
                     row.value,
                     lastOpened.value,
                     overrides.value,
                     resumes.intValue,
+                    christmas = christmas.value,
                     onMove = onMove,
                     onHide = onHide,
                 )
@@ -159,13 +163,14 @@ class MainActivity : ComponentActivity() {
 
     /**
      * Takes a pending test switch (from TestSwitchActivity, adb only), which applies to this opening
-     * only, and reads the layout setting, so coming back from Settings shows the new look at once.
+     * only, and reads the layout and Christmas settings, so coming back from Settings shows the new look at once.
      */
     private fun applyTestSwitch() {
         val test = HomeTestSwitch.take()
         overrides.value = test
         sampleShows.value = test?.sampleShows?.let { sampleShows(it, SAMPLE_APPS, System.currentTimeMillis()) }
         layout.value = test?.layout ?: HomePrefs.homeLayout(this)
+        christmas.value = showsChristmas(test, HomePrefs.christmasOn(this))
     }
 
     /** Saves a change to the app row (a tile moved or hidden) and shows it at once. */

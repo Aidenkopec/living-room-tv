@@ -1,6 +1,6 @@
 # Pinned stable versions.
 [versions]
-agp = "9.4.1"
+agp = "9.5.1"
 kotlin = "2.4.21"
 composeBom = "2026.09.00"
 activityCompose = "1.13.0"
@@ -9,7 +9,7 @@ lifecycle = "2.11.0"
 tvMaterial = "1.1.0"
 junit = "4.13.2"
 json = "20260814"
-spotless = "8.10.4"
+spotless = "8.11.0"
 ktlint = "1.8.0"
 detekt = "2.0.0-alpha.6"
 

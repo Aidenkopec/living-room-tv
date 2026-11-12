@@ -4,12 +4,13 @@
 
 A replacement home screen for my TV: a 2021 Hisense Google TV with Android 12, a 32-bit ARM chip and about 1.8 GB of RAM. It's written in Kotlin with Jetpack Compose for TV.
 
-It does four main things:
+It does five main things:
 
 - **Takes over the remote's Home button** without replacing Google's launcher.
 - **Paints Calgary's real sky,** with the sun, moon and weather where they actually are right now.
 - **Keeps a Continue watching row** built from other apps' media sessions.
 - **Runs as the TV's screensaver.**
+- **Dresses up for Christmas** when a switch in Settings is on ([below](#christmas)).
 
 ![Mountains and dock at dusk: a clock over a photo of Mount Rundle with the evening sky behind it, and a dock of apps at the bottom](docs/images/dock-dusk.jpg)
 
@@ -23,6 +24,17 @@ It does four main things:
     <td align="center">The same screen at night</td>
   </tr>
 </table>
+
+## Christmas
+
+A switch in Settings turns on a Christmas theme for the holidays. Turning it off puts back whichever home screen and screensaver were chosen before.
+
+![The Christmas village through a day: night, first light, sunrise, full day, fading light, dusk with the lamps on, evening and late night](docs/images/village-day.gif)
+
+- **The Village** takes the place of the home screen. It's a mountain village lit by Calgary's real sun, with snow, chimney smoke and villagers who keep their own hours: sledging in the morning, the market in the afternoon, carol singers in the evening, a fox at night. A dog rides the app dock and knocks the snow off whichever tile he lands on. In December, the line under the clock counts the sleeps to Christmas.
+- **Fireside** takes the place of the screensaver. It's a cabin room with a fire, a lit tree and two dogs asleep on the rug. Now and then Santa comes down the chimney. The remote's arrows and OK play with the room instead of waking the TV.
+
+![Santa on the hearth in front of the fireplace, with two dogs on the rug and the lit tree beside him](docs/images/fireside-santa.jpg)
 
 ## What's interesting
 
@@ -47,6 +59,12 @@ It does four main things:
 **Smooth with 1.8 GB.**
 - The dock's tiles are laid out once, at their largest size. After that they're only scaled and moved in the draw phase (`graphicsLayer`), driven by one animated focus value; resizing them on every frame dropped frames.
 - Memory is measured on the TV, with every reading kept in the change log: 51–60 MB while showing, against an 80 MB budget.
+
+**Hundreds of moving pieces, one draw call.**
+- The Christmas scenes use no image files. Every figure is a list of shapes built in plain Kotlin, painted once at start into a sprite sheet.
+- Each frame draws all the moving pieces from that sheet in a single `drawVertices` call. On this GPU a frame's cost is counted in draw calls, not pieces: 800 pieces in one call cost about 0.2 ms, while 100 pieces drawn one at a time cost 2 ms (12 ms at worst).
+- The two dogs are small skeletons (torso, neck, head, tail and three bones to a leg) posed with inverse kinematics. Santa's visit is a pure function of time, like every other timeline in the scenes, so it's tested on the JVM.
+- Memory: about 61 MB with the village showing, and 76 MB with Fireside over it during Santa's visit.
 
 **Continue watching without any app's cooperation.**
 - A `NotificationListenerService` follows other apps' media sessions. It exists only to get access to `MediaSessionManager` and never reads a notification.

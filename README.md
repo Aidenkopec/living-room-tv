@@ -58,7 +58,7 @@ A switch in Settings turns on a Christmas theme for the holidays. Turning it off
 
 **Smooth with 1.8 GB.**
 - The dock's tiles are laid out once, at their largest size. After that they're only scaled and moved in the draw phase (`graphicsLayer`), driven by one animated focus value; resizing them on every frame dropped frames.
-- Memory is measured on the TV, with every reading kept in the change log: 51–60 MB while showing, against an 80 MB budget.
+- Memory is measured on the TV, with every reading kept in the change log: 51–61 MB while showing, against an 80 MB budget.
 
 **Hundreds of moving pieces, one draw call.**
 - The Christmas scenes use no image files. Every figure is a list of shapes built in plain Kotlin, painted once at start into a sprite sheet.
@@ -77,11 +77,11 @@ A switch in Settings turns on a Christmas theme for the holidays. Turning it off
 
 **Decisions you can test without a TV.**
 - Every decision lives in a pure function: focus rules, title fitting, sun and moon positions, which sky to show, file formats, test-switch parsing.
-- About 370 JVM unit tests cover them, and the Android code around them stays thin.
+- About 620 JVM unit tests cover them, and the Android code around them stays thin.
 
 **Every change to the TV is reversible.**
 - The TV itself was cleaned up too: unused apps removed, tracking turned off.
-- [The change log](docs/tv-change-log.md) lists 76 changes, each with its exact command and its exact undo.
+- [The change log](docs/tv-change-log.md) lists 98 changes, each with its exact command and its exact undo.
 - `scripts/restore-tv.sh` puts all of it back on this TV, and is tested against a fake `adb`.
 
 ## How I built it
@@ -134,6 +134,8 @@ cd launcher
 
 Without them, the screensaver shows only the painted sky, and the dock screen shows painted ridges.
 
+**Stocking names (optional).** Fireside's four stockings read their names from `launcher/app/src/main/assets/christmas/stockings.txt`, one a line, left to right. The file is git-ignored; without it the stockings say Holly, Pip, Rex and Ivy.
+
 **Install** on a TV with network ADB turned on. `$TV` is the TV's address, for example `<address>:5555`:
 
 ```sh
@@ -176,10 +178,16 @@ The switches:
 | `WEATHER` | Puts an Open-Meteo weather code in the sky. |
 | `SAMPLE_SHOWS` | Shows that many placeholder shows instead of the real ones (Living sky only). |
 | `LAYOUT` | `dock` or `sky`. |
-| `SAVER_AT` | Opens a screensaver preview at that time. The three switches below work only alongside it. |
+| `CHRISTMAS` | `on` or `off`: the Christmas village or the chosen layout, whatever Settings says. |
+| `DATE` | The screen as if it were that date (`2026-12-12`): the countdown under the clock and the village's lit windows follow it. |
+| `SPRITES` | Adds that many extra moving pieces to the village (up to 1000), for measuring what the GPU can take. |
+| `SAVER_AT` | Opens a screensaver preview at that time. The switches below work only alongside it. |
 | `SAVER_WEATHER` | Weather for the preview. |
 | `SAVER_OFF_MIN` | Minutes until the late-night turn-off. |
-| `SAVER_NEXT` | Gives the time and turn-off to the next real screensaver instead of opening a preview (the weather isn't carried over). |
+| `SAVER_CHRISTMAS` | `on` or `off`: Fireside or the everyday screensaver, whatever Settings says. |
+| `SAVER_SANTA` | Santa comes down the chimney that many seconds after Fireside starts (up to 3600). |
+| `SAVER_MOMENT` | One of the dogs' moments (`roll`, `zoomies`, `dream`) a few seconds in; `SAVER_DOG` (`big` or `small`) picks the dreamer. |
+| `SAVER_NEXT` | Gives all of the above to the next real screensaver instead of opening a preview. |
 
 ## Repository
 
